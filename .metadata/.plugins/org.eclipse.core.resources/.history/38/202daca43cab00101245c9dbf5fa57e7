@@ -1,0 +1,40 @@
+package com.example.curingdunning.entity;
+
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "curing_action")
+public class CuringAction {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long actionId;
+
+    @ManyToOne
+    @JoinColumn(name = "event_id", nullable = false)
+    private DunningEvent event;
+
+    @Enumerated(EnumType.STRING)
+    private ActionType actionType;
+
+    @Enumerated(EnumType.STRING)
+    private Status status = Status.PENDING;
+
+    private LocalDateTime executedAt;
+
+    public enum ActionType {
+        EMAIL,
+        SMS,
+        CALL,
+        WAIVER
+    }
+
+    public enum Status {
+        PENDING,
+        COMPLETED,
+        FAILED
+    }
+
+    // getters and setters
+}
