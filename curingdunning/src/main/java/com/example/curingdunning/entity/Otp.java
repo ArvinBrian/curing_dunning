@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+//import jakarta.validation.constraints.Email;
 import lombok.Data;
 
 @Data
@@ -22,6 +23,9 @@ public class Otp {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long otpId;
+    
+//    @Email
+    private String email;
 
     @ManyToOne
     @JoinColumn(name = "customer_id", nullable = false)

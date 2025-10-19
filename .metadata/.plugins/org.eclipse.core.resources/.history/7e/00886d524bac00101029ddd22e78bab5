@@ -1,0 +1,69 @@
+package com.example.curingdunning.service;
+
+
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.LoginRequest;
+import com.example.curingdunning.dto.SignupRequest;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.security.JwtUtil;
+
+@Service
+public class AuthServiceImpl implements AuthService {
+
+	@Autowired
+	private JwtUtil jwtUtil;
+	
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Override
+    public ResponseEntity<String> signup(SignupRequest request) {
+        if (customerRepository.existsByEmail(request.getEmail())) {
+            return new ResponseEntity<>("Email already registered", HttpStatus.BAD_REQUEST);
+        }
+
+        Customer customer = new Customer();
+        customer.setName(request.getName());
+        customer.setEmail(request.getEmail());
+        customer.setPhone(request.getPhone());
+        customer.setStatus(Customer.Status.ACTIVE);
+        customer.setUpdatedAt(java.time.LocalDateTime.now());
+        customer.setCreatedAt(java.time.LocalDateTime.now());
+
+        // hash password
+        customer.setPassword(passwordEncoder.encode(request.getPassword()));
+
+        customerRepository.save(customer);
+        return new ResponseEntity<>("Signup successful", HttpStatus.CREATED);
+    }
+
+    @Override
+    public ResponseEntity<String> login(LoginRequest request) {
+        Optional<Customer> existingCustomer = customerRepository.findByEmail(request.getEmail());
+
+        if (existingCustomer.isEmpty()) {
+            return new ResponseEntity<>("Invalid email or password", HttpStatus.UNAUTHORIZED);
+        }
+
+        Customer customer = existingCustomer.get();
+
+        if (!passwordEncoder.matches(request.getPassword(), customer.getPassword())) {
+            return new ResponseEntity<>("Invalid email or password", HttpStatus.UNAUTHORIZED);
+        }
+
+        String token = jwtUtil.generateToken(customer.getEmail());
+        return new ResponseEntity<>("JWT Token: " + token, HttpStatus.OK);
+    }
+
+}

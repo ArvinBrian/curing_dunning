@@ -1,0 +1,66 @@
+package com.example.curingdunning.service;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.entity.Otp;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.repository.OtpRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+
+@Service
+public class OtpService {
+
+    @Autowired
+    private OtpRepository otpRepository;
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    // Generate OTP for a customer identified by email
+    public Otp generateOtp(String email) {
+        Optional<Customer> customerOpt = customerRepository.findByEmail(email);
+        if (customerOpt.isEmpty()) {
+            throw new RuntimeException("Customer not found for email: " + email);
+        }
+
+        Customer customer = customerOpt.get();
+
+        Otp otp = new Otp();
+        otp.setCustomer(customer);
+        otp.setEmail(email);
+        otp.setOtpCode(String.valueOf((int)(100000 + Math.random() * 900000))); // 6-digit OTP
+        otp.setGeneratedAt(LocalDateTime.now());
+        otp.setExpiresAt(otp.getGeneratedAt().plusMinutes(5));
+        otp.setStatus(Otp.Status.PENDING);
+
+        return otpRepository.save(otp);
+    }
+
+    // Verify OTP for a customer identified by email
+    public boolean verifyOtp(String email, String code) {
+        Optional<Customer> customerOpt = customerRepository.findByEmail(email);
+        if (customerOpt.isEmpty()) {
+            return false;
+        }
+        Customer customer = customerOpt.get();
+
+        Optional<Otp> otpOpt = otpRepository.findByCustomerAndOtpCodeAndStatus(customer, code, Otp.Status.PENDING);
+
+        if (otpOpt.isPresent()) {
+            Otp otp = otpOpt.get();
+            if (otp.getExpiresAt().isAfter(LocalDateTime.now())) {
+                otp.setStatus(Otp.Status.USED);
+                otpRepository.save(otp);
+                return true;
+            } else {
+                otp.setStatus(Otp.Status.EXPIRED);
+                otpRepository.save(otp);
+            }
+        }
+        return false;
+    }
+}

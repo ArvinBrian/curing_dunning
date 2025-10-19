@@ -1,0 +1,46 @@
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.entity.Otp;
+import com.example.curingdunning.repository.OtpRepository;
+
+@Service
+public class OtpService {
+
+    @Autowired
+    private OtpRepository otpRepository;
+
+    otp.setGeneratedAt(LocalDateTime.now());
+    otp.setExpiresAt(otp.getGeneratedAt().plusMinutes(5));
+    otp.setStatus(Otp.Status.PENDING);
+
+    
+    public Otp generateOtp(String email) {
+        Otp otp = new Otp();
+        otp.setEmail(email);
+        otp.setOtpCode(String.valueOf((int)(100000 + Math.random() * 900000))); // 6-digit OTP
+        otp.setExpiresAt(LocalDateTime.now().plusMinutes(5));
+        return otpRepository.save(otp);
+    }
+
+    public boolean verifyOtp(String email, String code) {
+    	Optional<Otp> otpOpt = otpRepository.findByCustomerAndOtpCodeAndStatus(customer, code, Otp.Status.PENDING);
+
+    	if (otpOpt.isPresent()) {
+    	    Otp otp = otpOpt.get();
+    	    if (otp.getExpiresAt().isAfter(LocalDateTime.now())) {
+    	        otp.setStatus(Otp.Status.USED);
+    	        otpRepository.save(otp);
+    	        return true;
+    	    } else {
+    	        otp.setStatus(Otp.Status.EXPIRED);
+    	        otpRepository.save(otp);
+    	    }
+    	}
+    	return false;
+
+    }
+}

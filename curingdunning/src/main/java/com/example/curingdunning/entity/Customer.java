@@ -28,11 +28,15 @@ public class Customer {
 
     @Column(unique = true)
     private String email;
+    
+    @Column(nullable = false)
+    private String password;
+
 
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    private Status status = Status.ACTIVE;
+    private Status status = Status.INACTIVE;
 
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
