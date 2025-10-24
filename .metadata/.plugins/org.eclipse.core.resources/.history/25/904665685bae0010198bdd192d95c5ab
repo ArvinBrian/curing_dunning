@@ -1,0 +1,10 @@
+package com.example.curingdunning.dto;
+import lombok.Data;
+
+@Data
+public class CuringActionDTO {
+    private Long customerId;
+    private String actionName;
+    private String serviceName;
+    private String description;
+}

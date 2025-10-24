@@ -1,0 +1,44 @@
+package com.example.curingdunning.controller;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.entity.DunningRule;
+
+@RestController
+@RequestMapping("/dunning-rules")
+public class DunningRuleController {
+
+    @Autowired
+    private DunningRuleService service;
+
+    @PostMapping
+    public ResponseEntity<DunningRule> createRule(@RequestBody DunningRule rule) {
+        return ResponseEntity.ok(service.createRule(rule));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<DunningRule>> getAllRules() {
+        return ResponseEntity.ok(service.getAllRules());
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<DunningRule> updateRule(@PathVariable Long id, @RequestBody DunningRule rule) {
+        return ResponseEntity.ok(service.updateRule(id, rule));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteRule(@PathVariable Long id) {
+        service.deleteRule(id);
+        return ResponseEntity.ok("Deleted successfully");
+    }
+}

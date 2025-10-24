@@ -1,0 +1,123 @@
+package com.example.curingdunning.service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.DunningEventDTO;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+import com.example.curingdunning.repository.DunningRuleRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+import jakarta.transaction.Transactional;
+
+@Service
+public class DunningEventService {
+
+    @Autowired 
+    private DunningEventRepository eventRepo;
+    @Autowired 
+    private DunningRuleRepository ruleRepo;
+    @Autowired 
+    private ServiceSubscriptionRepository subRepo;
+    @Autowired 
+    private CustomerRepository customerRepo;
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
+
+    /**
+     * Generate events for all customers by scanning subscriptions and rules.
+     * This method is safe to call manually or schedule.
+     */
+    @Transactional
+    public void generateEventsForAllCustomers() {
+        LocalDate today = LocalDate.now();
+        // fetch all subscriptions due before today (or due in past)
+        List<ServiceSubscription> subs = subRepo.findAll(); // scale: page through in prod
+        for (ServiceSubscription sub : subs) {
+            int daysOverdue = (int) ChronoUnit.DAYS.between(sub.getNextDueDate(), today);
+            if (daysOverdue <= 0) {
+                // not overdue; skip but still could create 'upcoming' notifications elsewhere
+                continue;
+            }
+
+            // find rules for this service
+            List<DunningRule> rules = ruleRepo.findByServiceName(sub.getServiceName());
+            // choose rules whose overdueDays <= daysOverdue
+            List<DunningRule> applicable = rules.stream()
+                    .filter(r -> daysOverdue >= r.getOverdueDays())
+                    .sorted(Comparator.comparing(r -> r.getPriority() == null ? Integer.MAX_VALUE : r.getPriority()))
+                    .collect(Collectors.toList());
+
+            if (applicable.isEmpty()) continue;
+
+            // Avoid duplicate events for same service/customer at same threshold:
+            // Simple heuristic: if most recent unresolved event for this service exists, skip creating a new one.
+            List<DunningEvent> existing = eventRepo.findByCustomerIdOrderByCreatedAtDesc(sub.getCustomer().getCustomerId())
+                    .stream()
+                    .filter(e -> e.getServiceName().equals(sub.getServiceName()) && !"RESOLVED".equals(e.getStatus()))
+                    .collect(Collectors.toList());
+            if (!existing.isEmpty()) {
+                // Already has pending event — optionally update daysOverdue
+                DunningEvent top = existing.get(0);
+                top.setDaysOverdue(daysOverdue);
+                eventRepo.save(top);
+                continue;
+            }
+
+            // create a new event using highest-priority rule
+            DunningRule chosen = applicable.get(0);
+
+            DunningEvent ev = new DunningEvent();
+            ev.setCustomer(sub.getCustomer());
+            ev.setServiceName(sub.getServiceName());
+            ev.setDaysOverdue(daysOverdue);
+            ev.setStatus("PENDING");
+            ev.setTriggeredBy("SYSTEM");
+            ev.setCreatedAt(LocalDateTime.now());
+            eventRepo.save(ev);
+
+            // optional: enqueue notification (SMS/email) based on chosen.action
+            log.info("Created dunning event: customer={} service={} daysOverdue={} rule={}",
+                    sub.getCustomer().getCustomerId(), sub.getServiceName(), daysOverdue, chosen.getId());
+        }
+    }
+
+    public List<DunningEventDTO> getEventsForCustomer(Long customerId) {
+        return eventRepo.findByCustomerIdOrderByCreatedAtDesc(customerId)
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
+    private DunningEventDTO toDto(DunningEvent e) {
+        DunningEventDTO dto = new DunningEventDTO();
+        dto.setEventId(e.getId());
+        dto.setServiceName(e.getServiceName());
+        dto.setDaysOverdue(e.getDaysOverdue());
+        dto.setStatus(e.getStatus());
+        dto.setCreatedAt(e.getCreatedAt());
+        return dto;
+    }
+
+    @Transactional
+    public void markResolved(Long eventId, Long actionId) {
+        DunningEvent ev = eventRepo.findById(eventId).orElseThrow(() -> new RuntimeException("Event not found"));
+        ev.setStatus("RESOLVED");
+        ev.setResolvedAt(LocalDateTime.now());
+        ev.setAppliedActionId(actionId);
+        eventRepo.save(ev);
+    }
+}

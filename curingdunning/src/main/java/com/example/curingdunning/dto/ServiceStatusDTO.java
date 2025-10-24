@@ -1,0 +1,14 @@
+package com.example.curingdunning.dto;
+import java.time.LocalDate;
+
+import lombok.Data;
+
+@Data
+public class ServiceStatusDTO {
+    private String serviceName;
+    private LocalDate nextDueDate;
+    private Integer daysUntilDue; // negative -> overdue
+    private String statusText; // "Due in 20 days" or "14 days overdue"
+    private String currentStatus;    // "ACTIVE" / "BLOCKED"
+    private String pendingAction;    // Recommended curing action
+}

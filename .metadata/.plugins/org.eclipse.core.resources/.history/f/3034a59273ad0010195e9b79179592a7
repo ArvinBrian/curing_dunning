@@ -1,0 +1,8 @@
+import java.time.LocalDate;
+
+public class ServiceStatusDTO {
+    private String serviceName;
+    private LocalDate nextDueDate;
+    private Integer daysUntilDue; // negative -> overdue
+    private String statusText; // "Due in 20 days" or "14 days overdue"
+}

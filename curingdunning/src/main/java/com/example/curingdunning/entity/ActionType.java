@@ -1,0 +1,9 @@
+package com.example.curingdunning.entity;
+
+
+public enum ActionType {
+    MAKE_PAYMENT,
+    CONTACT_SUPPORT,
+    UPLOAD_PROOF,
+    RESTORE_SERVICE
+}

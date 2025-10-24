@@ -1,0 +1,16 @@
+package com.example.curingdunning.repository;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.example.curingdunning.entity.ServiceSubscription;
+
+public interface ServiceSubscriptionRepository extends JpaRepository<ServiceSubscription, Long> {
+    Optional<ServiceSubscription> findByCustomerCustomerId(Long customerId);
+    List<ServiceSubscription> findByNextDueDateBefore(LocalDate date);
+    List<ServiceSubscription> findByServiceName(String serviceName);
+    Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceName(Long customerId, String serviceName);
+
+}

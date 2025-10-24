@@ -1,14 +1,14 @@
 package com.example.curingdunning.entity;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.time.LocalTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -16,24 +16,35 @@ import lombok.Data;
 @Entity
 @Table(name = "dunning_rule")
 public class DunningRule {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long ruleId;
-
+    // e.g. "Mobile", "Broadband"
     @Column(nullable = false)
-    private String name;
+    private String serviceName;
 
-    private String description;
-    private int daysAfterDue;
-    private int severityLevel = 1;
-    private boolean active = true;
+    // threshold (days). If days overdue >= overdueDays → create dunning event
+    @Column(nullable = true)
+    private Integer overdueDays;
 
-    private LocalDateTime createdAt = LocalDateTime.now();
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    // e.g. "SEND_SMS", "LOCK_SERVICE", "NOTIFY"
+    private String action;
 
-    @OneToMany(mappedBy = "rule")
-    private List<DunningEvent> events;
+    // optional priority
+    private Integer priority;
+    
+    @Column(name = "time_of_day") // nullable for postpaid rules
+    private LocalTime timeOfDay;
 
-    // getters and setters
+    // getter
+    public LocalTime getTimeOfDay() { return timeOfDay; }
+
+    // setter
+    public void setTimeOfDay(LocalTime timeOfDay) { this.timeOfDay = timeOfDay; }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_type", nullable = false)
+    private PlanType planType;
+
+    // getters / setters / equals / hashCode
 }

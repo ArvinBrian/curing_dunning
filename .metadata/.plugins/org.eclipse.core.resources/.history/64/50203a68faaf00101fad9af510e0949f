@@ -1,0 +1,112 @@
+package com.curingdunning.service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ApplyActionDTO;
+import com.example.curingdunning.dto.CuringActionDTO;
+import com.example.curingdunning.entity.ActionStatus;
+import com.example.curingdunning.entity.ActionType;
+import com.example.curingdunning.entity.CuringAction;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.repository.CuringActionRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+
+@Service
+public class CuringActionService {
+
+    @Autowired
+    private DunningEventRepository eventRepo;
+
+    @Autowired
+    private CuringActionRepository actionRepo;
+
+    @Autowired
+    private CustomerRepository customerRepo;
+
+    // 🟣 1️⃣ Get all actions for a given customer
+    public List<CuringActionDTO> getAvailableActionsForCustomer(Long customerId) {
+        List<CuringAction> actions = actionRepo.findByCustomerCustomerId(customerId);
+
+        return actions.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    // 🟣 2️⃣ Create & apply a curing action (when "Apply Action" button is clicked)
+    public CuringActionDTO applyAction(ApplyActionDTO dto) {
+        // Fetch the event
+        DunningEvent event = eventRepo.findById(dto.getEventId())
+                .orElseThrow(() -> new RuntimeException("Dunning event not found"));
+
+        // Fetch the customer (from event or explicitly)
+        Customer customer = event.getCustomer();
+        if (customer == null) {
+            throw new RuntimeException("Customer not associated with this event");
+        }
+
+        // Create new curing action
+        CuringAction action = new CuringAction(
+                event,
+                customer,
+                dto.getActionType()
+        );
+
+        action.setStatus(ActionStatus.INITIATED);
+        action.setCreatedAt(LocalDateTime.now());
+
+        // Save initial action
+        CuringAction savedAction = actionRepo.save(action);
+
+        // Simulate business logic — e.g. payment completed
+        boolean success = performCuringLogic(dto.getActionType(), event, customer);
+
+        if (success) {
+            // Update statuses
+            savedAction.setStatus(ActionStatus.COMPLETED);
+            savedAction.setResolvedAt(LocalDateTime.now());
+
+            event.setStatus("CURED");
+            event.setResolvedAt(LocalDateTime.now());
+
+            eventRepo.save(event);
+        } else {
+            savedAction.setStatus(ActionStatus.FAILED);
+        }
+
+        actionRepo.save(savedAction);
+
+        // Return DTO to frontend
+        return convertToDTO(savedAction);
+    }
+
+    // 🟣 3️⃣ Business logic placeholder
+    private boolean performCuringLogic(ActionType type, DunningEvent event, Customer customer) {
+        // This is where you'd integrate real logic:
+        // - payment gateway for MAKE_PAYMENT
+        // - support ticket for CONTACT_SUPPORT
+        // - proof upload verification for UPLOAD_PROOF
+        // For now, simulate success:
+        return true;
+    }
+
+    // 🟣 4️⃣ Convert entity → DTO
+    private CuringActionDTO convertToDTO(CuringAction action) {
+        return new CuringActionDTO(
+                action.getActionId(),
+                action.getDunningEvent().getEventId(),
+                action.getCustomer().getCustomerId(),
+                action.getDunningEvent().getServiceName(),
+                action.getActionType(),
+                action.getStatus(),
+                action.getCreatedAt(),
+                action.getResolvedAt()
+        );
+    }
+}

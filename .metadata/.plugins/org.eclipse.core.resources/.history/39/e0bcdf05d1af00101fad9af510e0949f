@@ -1,0 +1,72 @@
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.entity.Admin;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.repository.AdminRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningRuleRepository;
+
+@Service
+public class AdminService {
+
+    @Autowired
+    private AdminRepository adminRepo;
+
+    @Autowired
+    private DunningRuleRepository ruleRepo;
+
+    @Autowired
+    private CustomerRepository customerRepo;
+
+    // ✅ Admin login (simple validation for now)
+    public boolean login(String email, String password) {
+        Admin admin = adminRepo.findByEmail(email);
+        return admin != null && admin.getPassword().equals(password);
+    }
+
+    // ✅ Update Dunning Rule
+    public void updateRule(Long ruleId, DunningRule newRuleData) {
+        DunningRule rule = ruleRepo.findById(ruleId)
+                .orElseThrow(() -> new RuntimeException("Rule not found"));
+
+        // Only update provided fields (partial update)
+        if (newRuleData.getServiceName() != null)
+            rule.setServiceName(newRuleData.getServiceName());
+        if (newRuleData.getOverdueDays() != 0)
+            rule.setOverdueDays(newRuleData.getOverdueDays());
+        if (newRuleData.getAction() != null)
+            rule.setAction(newRuleData.getAction());
+        if (newRuleData.getPriority() != null)
+            rule.setPriority(newRuleData.getPriority());
+
+        ruleRepo.save(rule);
+    }
+
+    // ✅ Create new Dunning Rule (optional convenience method)
+    public DunningRule createRule(DunningRule rule) {
+        return ruleRepo.save(rule);
+    }
+
+    // ✅ Delete a Dunning Rule
+    public void deleteRule(Long ruleId) {
+        if (!ruleRepo.existsById(ruleId)) {
+            throw new RuntimeException("Rule not found");
+        }
+        ruleRepo.deleteById(ruleId);
+    }
+
+    // ✅ Override Customer Attributes (manual admin intervention)
+    public void overrideCustomerAttributes(Long customerId, Customer updated) {
+        Customer c = customerRepo.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        if (updated.getAccountStatus() != null)
+            c.setAccountStatus(updated.getAccountStatus());
+        if (updated.getDueAmount() != null)
+            c.setDueAmount(updated.getDueAmount());
+
+        customerRepo.save(c);
+    }
+}

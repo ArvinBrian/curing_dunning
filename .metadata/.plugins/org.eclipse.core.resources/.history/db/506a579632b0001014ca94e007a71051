@@ -1,0 +1,14 @@
+package com.example.curingdunning.repository;
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.example.curingdunning.entity.CuringAction;
+
+public interface CuringActionRepository extends JpaRepository<CuringAction, Long> {
+    List<CuringAction> findByServiceName(String serviceName);
+    List<CuringAction> findByCustomerCustomerId(Long customerId);
+    List<CuringAction> findByDunningEventServiceName(String serviceName);
+
+
+}

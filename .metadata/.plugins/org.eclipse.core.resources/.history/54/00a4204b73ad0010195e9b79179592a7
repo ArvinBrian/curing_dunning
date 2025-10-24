@@ -1,0 +1,9 @@
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import com.example.curingdunning.entity.DunningRule;
+
+public interface DunningRuleRepository extends JpaRepository<DunningRule, Long> {
+    List<DunningRule> findByServiceName(String serviceName);
+}

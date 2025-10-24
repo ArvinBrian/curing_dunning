@@ -1,0 +1,67 @@
+package com.example.curingdunning.controller;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.LoginRequest;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.repository.DunningRuleRepository;
+import com.example.curingdunning.service.AdminService;
+
+@RestController
+@RequestMapping("/api/admin")
+public class AdminController {
+
+    @Autowired
+    private AdminService adminService;
+    
+    @Autowired
+    private DunningRuleRepository ruleRepo;
+
+    @PostMapping("/login")
+    public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest) {
+        boolean success = adminService.login(loginRequest.getEmail(), loginRequest.getPassword());
+        if (success) return ResponseEntity.ok("Admin Login Successful");
+        else return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Credentials");
+    }
+
+    @PutMapping("/rules/{ruleId}")
+    public ResponseEntity<String> updateRule(@PathVariable Long ruleId, @RequestBody DunningRule rule) {
+        adminService.updateRule(ruleId, rule);
+        return ResponseEntity.ok("Rule updated successfully");
+    }
+
+    @PutMapping("/override-customer/{customerId}")
+    public ResponseEntity<String> overrideCustomer(@PathVariable Long customerId, @RequestBody Customer updatedData) {
+        adminService.overrideCustomerAttributes(customerId, updatedData);
+        return ResponseEntity.ok("Customer attributes overridden successfully");
+    }
+    
+    @GetMapping("/rules")
+    public ResponseEntity<List<DunningRule>> getAllRules() {
+        return ResponseEntity.ok(ruleRepo.findAll());
+    }
+
+    @PostMapping("/rules")
+    public ResponseEntity<DunningRule> createRule(@RequestBody DunningRule rule) {
+        return ResponseEntity.ok(adminService.createRule(rule));
+    }
+
+    @DeleteMapping("/rules/{id}")
+    public ResponseEntity<String> deleteRule(@PathVariable Long id) {
+        adminService.deleteRule(id);
+        return ResponseEntity.ok("Rule deleted successfully");
+    }
+
+}

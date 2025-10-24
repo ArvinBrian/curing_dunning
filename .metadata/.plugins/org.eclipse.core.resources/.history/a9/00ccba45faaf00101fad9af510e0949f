@@ -1,0 +1,55 @@
+package com.example.curingdunning.service;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ApplyActionDTO;
+import com.example.curingdunning.dto.CuringActionDTO;
+import com.example.curingdunning.entity.CuringAction;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.repository.CuringActionRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+
+@Service
+public class CuringActionService {
+
+    @Autowired
+    private DunningEventRepository eventRepo;
+
+    @Autowired
+    private CuringActionRepository actionRepo;
+
+    public List<CuringActionDTO> getAvailableActionsForCustomer(Long customerId) {
+        return actionRepo.findAll()
+                         .stream()
+                         .map(CuringActionDTO::new)
+                         .collect(Collectors.toList());
+    }
+
+
+    public void applyAction(ApplyActionDTO dto) {
+        // Fetch the event
+        DunningEvent event = eventRepo.findById(dto.getEventId())
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        Customer customer = event.getCustomer();
+        if (customer == null) {
+            throw new RuntimeException("Customer not associated with this event");
+        }
+
+        // Fetch the action
+        CuringAction action = actionRepo.findById(dto.getActionId())
+                .orElseThrow(() -> new RuntimeException("Action not found"));
+
+        // Apply your business logic here
+        // e.g., mark event as cured, update action status, log performedBy
+        event.setStatus("CURED");
+        eventRepo.save(event);
+
+        // Optionally log action application
+        // e.g., save in another table or audit log
+    }
+}

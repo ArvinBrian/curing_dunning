@@ -1,0 +1,45 @@
+package com.example.curingdunning.entity;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+//imports omitted
+@Entity
+@Table(name = "service_subscription")
+@Data
+public class ServiceSubscription {
+ @Id
+ @GeneratedValue(strategy = GenerationType.IDENTITY)
+ private Long id;
+
+ private String serviceName;
+
+ private LocalDate nextDueDate;
+
+ private String status; // ACTIVE / SUSPENDED etc.
+
+ // new field
+ @Column(precision = 19, scale = 2)
+ private BigDecimal dueAmount;
+ 
+ @Enumerated(EnumType.STRING)
+ private PlanType planType;
+
+ @ManyToOne
+ @JoinColumn(name = "customer_id")
+ private Customer customer;
+
+ // other fields, getters/setters
+}
+

@@ -1,0 +1,62 @@
+package com.example.curingdunning.service;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.CuringActionDTO;
+import com.example.curingdunning.dto.DashboardDTO;
+import com.example.curingdunning.dto.DunningEventDTO;
+import com.example.curingdunning.dto.ServiceStatusDTO;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+@Service
+public class DashboardService {
+
+    @Autowired private CustomerRepository customerRepo;
+    @Autowired private ServiceSubscriptionRepository subRepo;
+    @Autowired private DunningEventService eventService;
+    @Autowired private CuringActionService actionService;
+
+    public DashboardDTO getDashboardForCustomer(String email) {
+        Customer c = customerRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        DashboardDTO dash = new DashboardDTO();
+        dash.setCustomerId(c.getId());
+        dash.setEmail(c.getEmail());
+
+        // services
+        List<ServiceSubscription> subs = subRepo.findByCustomerId(c.getId());
+        List<ServiceStatusDTO> serviceDTOs = subs.stream().map(s -> {
+            ServiceStatusDTO sd = new ServiceStatusDTO();
+            sd.setServiceName(s.getServiceName());
+            sd.setNextDueDate(s.getNextDueDate());
+            long daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), s.getNextDueDate());
+            sd.setDaysUntilDue((int) daysUntil);
+            if (daysUntil < 0) {
+                sd.setStatusText(Math.abs(daysUntil) + " days overdue");
+            } else {
+                sd.setStatusText("Due in " + daysUntil + " days");
+            }
+            return sd;
+        }).collect(Collectors.toList());
+        dash.setServices(serviceDTOs);
+
+        // events
+        List<DunningEventDTO> events = eventService.getEventsForCustomer(c.getId());
+        dash.setEvents(events);
+
+        // available actions: for each service collect actions or all actions
+        List<CuringActionDTO> actions = actionService.getAvailableActionsForCustomer(c.getId());
+        dash.setAvailableActions(actions);
+
+        return dash;
+    }
+}

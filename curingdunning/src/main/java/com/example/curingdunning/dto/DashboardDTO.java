@@ -1,0 +1,14 @@
+package com.example.curingdunning.dto;
+import java.util.List;
+
+import lombok.Data;
+
+@Data
+public class DashboardDTO {
+    private Long customerId;
+    private String email;
+    private List<ServiceStatusDTO> services; // due dates + overdue info
+    private List<DunningEventDTO> events;
+    private List<CuringActionDTO> availableActions;
+    // getters/setters
+}

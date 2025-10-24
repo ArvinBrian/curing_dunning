@@ -1,0 +1,5 @@
+public class ApplyActionDTO {
+    private Long eventId;
+    private Long actionId;
+    private String performedBy; // user/admin
+}

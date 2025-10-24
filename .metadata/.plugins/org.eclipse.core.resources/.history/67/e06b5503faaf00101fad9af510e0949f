@@ -1,0 +1,18 @@
+package com.example.curingdunning.dto;
+import com.example.curingdunning.entity.CuringAction;
+
+import lombok.Data;
+
+@Data
+public class CuringActionDTO {
+    private Long id;
+    private String name;
+    private String description;
+
+    // Constructor from entity
+    public CuringActionDTO(CuringAction action) {
+        this.id = action.getId();
+        this.name = action.getActionName();
+        this.description = action.getDescription();
+    }
+}

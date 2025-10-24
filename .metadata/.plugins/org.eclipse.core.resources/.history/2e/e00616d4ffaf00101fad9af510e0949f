@@ -1,0 +1,1 @@
+public enum PlanType { PREPAID, POSTPAID }

@@ -1,0 +1,10 @@
+package com.example.curingdunning.dto;
+
+import lombok.Data;
+
+@Data
+public class ApplyActionDTO {
+    private Long eventId;
+    private Long actionId;
+    private String performedBy; // user/admin
+}
