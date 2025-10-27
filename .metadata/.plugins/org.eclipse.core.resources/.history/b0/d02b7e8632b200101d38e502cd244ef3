@@ -1,0 +1,59 @@
+package com.example.curingdunning.dto;
+
+import java.time.LocalDateTime;
+
+
+import jakarta.validation.constraints.Future;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public class BillDTO {
+
+    @NotNull(message = "Customer ID is required")
+    private Long customerId;
+
+    @NotBlank(message = "Service name cannot be blank")
+    private String serviceName;
+
+    @NotNull(message = "Amount is required")
+    @Min(value = 1, message = "Amount must be at least 1")
+    private Double amount;
+
+    @NotNull(message = "Due date is required")
+    @Future(message = "Due date must be in the future")
+    private LocalDateTime dueDate;
+
+    // Getters and setters
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
+    }
+
+    public String getServiceName() {
+        return serviceName;
+    }
+
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
+    }
+
+    public Double getAmount() {
+        return amount;
+    }
+
+    public void setAmount(Double amount) {
+        this.amount = amount;
+    }
+
+    public LocalDateTime getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(LocalDateTime dueDate) {
+        this.dueDate = dueDate;
+    }
+}

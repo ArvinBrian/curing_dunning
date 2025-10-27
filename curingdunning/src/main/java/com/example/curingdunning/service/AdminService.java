@@ -2,19 +2,18 @@ package com.example.curingdunning.service;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.example.curingdunning.entity.Admin;
-import com.example.curingdunning.entity.Customer;
 import com.example.curingdunning.entity.DunningRule;
 import com.example.curingdunning.entity.ServiceSubscription;
 import com.example.curingdunning.repository.AdminRepository;
 import com.example.curingdunning.repository.CustomerRepository;
 import com.example.curingdunning.repository.DunningRuleRepository;
 import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+import com.example.curingdunning.security.JwtUtil;
 
 @Service
 public class AdminService {
@@ -31,20 +30,27 @@ public class AdminService {
     @Autowired
     private ServiceSubscriptionRepository subRepo;
 
-    // Admin login
-    public boolean login(String email, String password) {
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    // ---------------- Admin login ----------------
+    public String login(String email, String password) {
         Admin admin = adminRepo.findByEmail(email);
-        return admin != null && admin.getPassword().equals(password);
+        if (admin == null || !admin.getPassword().equals(password)) {
+            throw new RuntimeException("Invalid credentials");
+        }
+        //dont forget to add the role here
+        return jwtUtil.generateToken(admin.getEmail(),"ADMIN");
     }
 
-    // Update a Dunning Rule
+    // ---------------- Update a Dunning Rule ----------------
     public void updateRule(Long ruleId, DunningRule newRuleData) {
         DunningRule rule = ruleRepo.findById(ruleId)
                 .orElseThrow(() -> new RuntimeException("Rule not found"));
 
         if (newRuleData.getServiceName() != null)
             rule.setServiceName(newRuleData.getServiceName());
-        if (newRuleData.getOverdueDays() != 0)
+        if (newRuleData.getOverdueDays() != null)
             rule.setOverdueDays(newRuleData.getOverdueDays());
         if (newRuleData.getAction() != null)
             rule.setAction(newRuleData.getAction());
@@ -53,10 +59,9 @@ public class AdminService {
 
         ruleRepo.save(rule);
     }
-    
- // ---------------- Create a new Dunning Rule ----------------
+
+    // ---------------- Create a new Dunning Rule ----------------
     public DunningRule createRule(DunningRule rule) {
-        // Optional: validate rule fields here
         return ruleRepo.save(rule);
     }
 
@@ -68,7 +73,7 @@ public class AdminService {
         ruleRepo.deleteById(ruleId);
     }
 
-    // Override a specific subscription (per-service)
+    // ---------------- Override a specific subscription ----------------
     public void overrideSubscriptionAttributes(Long subscriptionId, BigDecimal newDueAmount, String newStatus) {
         ServiceSubscription sub = subRepo.findById(subscriptionId)
                 .orElseThrow(() -> new RuntimeException("Subscription not found"));
@@ -79,16 +84,17 @@ public class AdminService {
         subRepo.save(sub);
     }
 
-    // Override all subscriptions of a customer for a specific service
-    public void overrideCustomerSubscription(Long customerId, String serviceName, BigDecimal newDueAmount, String newStatus) {
-        Optional<ServiceSubscription> subOpt = subRepo.findByCustomerCustomerIdAndServiceName(customerId, serviceName);
+    // ---------------- Override all subscriptions of a customer for a specific service ----------------
+    public void overrideCustomerSubscription(Long customerId, String serviceName, Long subscriptionId, BigDecimal newDueAmount, String newStatus) {
+        ServiceSubscription sub = subRepo.findByCustomerCustomerIdAndServiceNameAndId(customerId, serviceName, subscriptionId)
+            .orElseThrow(() -> new RuntimeException("Subscription not found"));
 
-        ServiceSubscription s = subOpt.orElseThrow(() -> new RuntimeException("Subscription not found"));
+        if (newDueAmount != null) sub.setDueAmount(newDueAmount);
+        if (newStatus != null) sub.setStatus(newStatus);
 
-        if (newDueAmount != null) s.setDueAmount(newDueAmount);
-        if (newStatus != null) s.setStatus(newStatus);
-
-        subRepo.save(s);
+        subRepo.save(sub);
     }
+
+
 
 }

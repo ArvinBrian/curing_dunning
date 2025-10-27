@@ -11,6 +11,8 @@ public interface ServiceSubscriptionRepository extends JpaRepository<ServiceSubs
     List<ServiceSubscription> findByCustomerCustomerId(Long customerId);
     List<ServiceSubscription> findByNextDueDateBefore(LocalDate date);
     List<ServiceSubscription> findByServiceName(String serviceName);
-    Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceName(Long customerId, String serviceName);
-
+    List<ServiceSubscription> findByCustomerCustomerIdAndServiceName(Long customerId, String serviceName);
+    Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceNameAndId(
+            Long customerId, String serviceName, Long subscriptionId
+        );
 }

@@ -1,0 +1,19 @@
+package com.example.curingdunning.service;
+
+import java.util.List;
+
+import com.example.curingdunning.dto.BillDTO;
+import com.example.curingdunning.entity.Bill;
+
+public interface BillService {
+    Bill createBill(Bill bill);
+    Bill getBillById(Long id);
+    List<Bill> getBillsByCustomer(Long customerId);
+    List<Bill> getAllBills();
+    Bill markBillAsPaid(Long billId);
+    List<BillDTO> getCurrentBills(Long customerId);
+    List<BillDTO> getPastBills(Long customerId);
+    
+    BillDTO toDTO(Bill bill);
+	Bill markBillAsPaid(Bill bill);
+}

@@ -51,6 +51,9 @@ public class Customer {
         ACTIVE,
         INACTIVE
     }
+    
+    private String role = "CUSTOMER"; // default role
+
 
     // getters and setters
 }

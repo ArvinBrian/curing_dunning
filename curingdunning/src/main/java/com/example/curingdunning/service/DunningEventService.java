@@ -179,10 +179,17 @@ public class DunningEventService {
         eventRepo.save(ev);
 
         // Fetch customer subscription
-        ServiceSubscription sub = subRepo.findByCustomerCustomerIdAndServiceName(
-                ev.getCustomer().getCustomerId(),
-                ev.getServiceName()
-        ).orElseThrow(() -> new RuntimeException("Subscription not found"));
+        List<ServiceSubscription> subs = subRepo.findByCustomerCustomerIdAndServiceName(
+        	    ev.getCustomer().getCustomerId(),
+        	    ev.getServiceName()
+        	);
+
+        	if (subs.isEmpty()) {
+        	    throw new RuntimeException("Subscription not found");
+        	}
+
+        	// For now, take the first one if there could be multiple
+        	ServiceSubscription sub = subs.get(0);
 
         // Reset negative effect by setting status back to ACTIVE
         sub.setStatus("ACTIVE");

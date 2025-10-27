@@ -1,0 +1,99 @@
+package com.example.curingdunning.controller;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.LoginRequest;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.repository.DunningRuleRepository;
+import com.example.curingdunning.service.AdminService;
+
+@RestController
+@RequestMapping("/api/admin")
+public class AdminController {
+
+    @Autowired
+    private AdminService adminService;
+
+    @Autowired
+    private DunningRuleRepository ruleRepo;
+
+    // ---------------- Admin login ----------------
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, String>> login(@RequestBody LoginRequest loginRequest) {
+        try {
+            String token = adminService.login(loginRequest.getEmail(), loginRequest.getPassword());
+            return ResponseEntity.ok(Map.of("token", token));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ---------------- CRUD Dunning Rules ----------------
+    @PutMapping("/rules/{ruleId}")
+    public ResponseEntity<String> updateRule(@PathVariable Long ruleId, @RequestBody DunningRule rule) {
+        adminService.updateRule(ruleId, rule);
+        return ResponseEntity.ok("Rule updated successfully");
+    }
+
+    @GetMapping("/rules")
+    public ResponseEntity<List<DunningRule>> getAllRules() {
+        return ResponseEntity.ok(ruleRepo.findAll());
+    }
+
+    @PostMapping("/rules")
+    public ResponseEntity<DunningRule> createRule(@RequestBody DunningRule rule) {
+        DunningRule created = adminService.createRule(rule);
+        return ResponseEntity.ok(created);
+    }
+
+    @DeleteMapping("/rules/{ruleId}")
+    public ResponseEntity<String> deleteRule(@PathVariable Long ruleId) {
+        adminService.deleteRule(ruleId);
+        return ResponseEntity.ok("Rule deleted successfully");
+    }
+
+    // ---------------- Override subscription ----------------
+    @PutMapping("/override-subscription/{subscriptionId}")
+    public ResponseEntity<String> overrideSubscription(
+            @PathVariable Long subscriptionId,
+            @RequestBody Map<String, Object> payload) {
+
+        BigDecimal dueAmount = payload.get("dueAmount") != null
+                ? new BigDecimal(payload.get("dueAmount").toString())
+                : null;
+        String status = (String) payload.get("status");
+
+        adminService.overrideSubscriptionAttributes(subscriptionId, dueAmount, status);
+        return ResponseEntity.ok("Subscription updated successfully");
+    }
+
+    // ---------------- Override customer subscription ----------------
+    @PutMapping("/override-customer/{customerId}/{serviceName}")
+    public ResponseEntity<String> overrideCustomerService(
+            @PathVariable Long customerId,
+            @PathVariable String serviceName,
+            @RequestBody Map<String, Object> payload) {
+
+        BigDecimal dueAmount = payload.get("dueAmount") != null
+                ? new BigDecimal(payload.get("dueAmount").toString())
+                : null;
+        String status = (String) payload.get("status");
+
+        adminService.overrideCustomerSubscription(customerId, serviceName, dueAmount, status);
+        return ResponseEntity.ok("Customer subscriptions updated successfully");
+    }
+}

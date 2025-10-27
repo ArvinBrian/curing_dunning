@@ -1,5 +1,6 @@
 package com.example.curingdunning.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -15,6 +16,12 @@ public class Admin {
     private Long adminId;
 
     private String name;
+    
+    @Column(nullable = false, unique=true)
     private String email;
+    @Column(nullable = false)
     private String password;
+    
+    private String role = "ADMIN"; // default role
+
 }

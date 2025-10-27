@@ -26,43 +26,47 @@ public class AdminController {
 
     @Autowired
     private AdminService adminService;
-    
+
     @Autowired
     private DunningRuleRepository ruleRepo;
 
+    // ---------------- Admin login ----------------
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest loginRequest) {
-        boolean success = adminService.login(loginRequest.getEmail(), loginRequest.getPassword());
-        if (success) return ResponseEntity.ok("Admin Login Successful");
-        else return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Credentials");
+    public ResponseEntity<Map<String, String>> login(@RequestBody LoginRequest loginRequest) {
+        try {
+            String token = adminService.login(loginRequest.getEmail(), loginRequest.getPassword());
+            return ResponseEntity.ok(Map.of("token", token));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
+    // ---------------- CRUD Dunning Rules ----------------
     @PutMapping("/rules/{ruleId}")
     public ResponseEntity<String> updateRule(@PathVariable Long ruleId, @RequestBody DunningRule rule) {
         adminService.updateRule(ruleId, rule);
         return ResponseEntity.ok("Rule updated successfully");
     }
-    
+
     @GetMapping("/rules")
     public ResponseEntity<List<DunningRule>> getAllRules() {
         return ResponseEntity.ok(ruleRepo.findAll());
     }
-    
-    //write logic for this in service
+
     @PostMapping("/rules")
     public ResponseEntity<DunningRule> createRule(@RequestBody DunningRule rule) {
         DunningRule created = adminService.createRule(rule);
         return ResponseEntity.ok(created);
     }
-    
-    //no logic, finish it
+
     @DeleteMapping("/rules/{ruleId}")
     public ResponseEntity<String> deleteRule(@PathVariable Long ruleId) {
         adminService.deleteRule(ruleId);
         return ResponseEntity.ok("Rule deleted successfully");
     }
 
- // Override a single subscription
+    // ---------------- Override subscription ----------------
     @PutMapping("/override-subscription/{subscriptionId}")
     public ResponseEntity<String> overrideSubscription(
             @PathVariable Long subscriptionId,
@@ -77,11 +81,12 @@ public class AdminController {
         return ResponseEntity.ok("Subscription updated successfully");
     }
 
-    // Override customer subscriptions by service
-    @PutMapping("/override-customer/{customerId}/{serviceName}")
+    // ---------------- Override customer subscription ----------------
+    @PutMapping("/override-customer/{customerId}/{serviceName}/{subscriptionId}")
     public ResponseEntity<String> overrideCustomerService(
             @PathVariable Long customerId,
             @PathVariable String serviceName,
+            @PathVariable Long subscriptionId,
             @RequestBody Map<String, Object> payload) {
 
         BigDecimal dueAmount = payload.get("dueAmount") != null
@@ -89,9 +94,8 @@ public class AdminController {
                 : null;
         String status = (String) payload.get("status");
 
-        adminService.overrideCustomerSubscription(customerId, serviceName, dueAmount, status);
-        return ResponseEntity.ok("Customer subscriptions updated successfully");
+        adminService.overrideCustomerSubscription(customerId, serviceName, subscriptionId, dueAmount, status);
+        return ResponseEntity.ok("Customer subscription updated successfully");
     }
-
 
 }

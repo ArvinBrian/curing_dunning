@@ -1,0 +1,5 @@
+package com.example.curingdunning.exception;
+
+public class BillNotFoundException {
+
+}

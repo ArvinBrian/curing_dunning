@@ -1,0 +1,48 @@
+package com.example.curingdunning.service;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.repository.BillRepository;
+
+@Service
+public class BillServiceImpl implements BillService {
+
+    @Autowired
+    private BillRepository billRepo;
+
+    @Override
+    public Bill createBill(Bill bill) {
+        return billRepo.save(bill);
+    }
+
+    @Override
+    public Bill getBillById(Long id) {
+        return billRepo.findById(id).orElse(null);
+    }
+
+    @Override
+    public List<Bill> getBillsByCustomer(Long customerId) {
+        return billRepo.findByCustomerId(customerId);
+    }
+
+    @Override
+    public List<Bill> getAllBills() {
+        return billRepo.findAll();
+    }
+
+    @Override
+    public Bill markBillAsPaid(Long billId) {
+        Bill bill = getBillById(billId);
+        if (bill != null) {
+            bill.setPaid(true);
+            bill.setPaymentDate(java.time.LocalDateTime.now());
+            bill.setStatus("PAID");
+            return billRepo.save(bill);
+        }
+        return null;
+    }
+}

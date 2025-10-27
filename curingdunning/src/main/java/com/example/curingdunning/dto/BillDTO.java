@@ -1,0 +1,33 @@
+package com.example.curingdunning.dto;
+
+import jakarta.validation.constraints.*;
+import lombok.Data;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Data
+public class BillDTO {
+
+    private Long billId;
+
+    @NotNull(message = "Customer ID is required")
+    private Long customerId;
+
+    @NotBlank(message = "Service name cannot be blank")
+    private String serviceName;
+
+    @NotNull(message = "Amount is required")
+    @DecimalMin(value = "1.00", message = "Amount must be at least 1.00")
+    private BigDecimal amount;
+
+    @NotNull(message = "Due date is required")
+    private LocalDateTime dueDate;
+
+    @NotBlank(message = "Status must be provided (PENDING, PAID, OVERDUE)")
+    private String status;
+
+    private LocalDateTime paidAt;
+
+    @Min(value = 0, message = "Days overdue cannot be negative")
+    private Integer daysOverdue;
+}

@@ -1,0 +1,118 @@
+package com.example.curingdunning.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.BillDTO;
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.exception.BillNotFoundException;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.service.BillService;
+
+import jakarta.validation.Valid;
+
+@RestController
+@RequestMapping("/api/bills")
+public class BillController {
+
+    @Autowired
+    private BillService billService;
+    
+    @Autowired
+    private CustomerRepository customerRepo;
+
+    // 🧾 Create a new bill
+    @PostMapping
+    public ResponseEntity<Bill> createBill(@Valid @RequestBody BillDTO dto) {
+        Bill bill = new Bill();
+//        bill.setCustomerId(dto.getCustomerId());
+        bill.setServiceName(dto.getServiceName());
+        bill.setAmount(dto.getAmount());
+        bill.setDueDate(dto.getDueDate());
+        bill.setStatus("PENDING");
+        Bill savedBill = billService.createBill(bill);
+        return new ResponseEntity<>(savedBill, HttpStatus.CREATED);
+    }
+
+    // 🔍 Get all bills
+    @GetMapping
+    public ResponseEntity<List<Bill>> getAllBills() {
+        List<Bill> bills = billService.getAllBills();
+        return ResponseEntity.ok(bills);
+    }
+
+    // 🔍 Get bill by ID
+    @GetMapping("/{id}")
+    public ResponseEntity<Bill> getBillById(@PathVariable Long id) {
+        Bill bill = billService.getBillById(id);
+        if (bill == null) {
+            throw new BillNotFoundException("Bill not found with ID: " + id);
+        }
+        return ResponseEntity.ok(bill);
+    }
+
+    // 🔍 Get all bills by customer
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<List<Bill>> getBillsByCustomer(@PathVariable Long customerId) {
+        List<Bill> bills = billService.getBillsByCustomer(customerId);
+        return ResponseEntity.ok(bills);
+    }
+    
+ // ✅ Get current (pending) bills for logged-in customer
+    @GetMapping("/current")
+    public ResponseEntity<List<BillDTO>> getCurrentBills(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) throw new RuntimeException("User not authenticated");
+
+        String email = userDetails.getUsername();
+        Customer c = customerRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        List<BillDTO> bills = billService.getCurrentBills(c.getCustomerId());
+        return ResponseEntity.ok(bills);
+    }
+
+    // ✅ Get past (paid) bills for logged-in customer
+    @GetMapping("/past")
+    public ResponseEntity<List<BillDTO>> getPastBills(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) throw new RuntimeException("User not authenticated");
+
+        String email = userDetails.getUsername();
+        Customer c = customerRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        List<BillDTO> bills = billService.getPastBills(c.getCustomerId());
+        return ResponseEntity.ok(bills);
+    }
+
+    // ✅ Mark a bill as paid (only if belongs to the logged-in customer)
+    @PutMapping("/mark-paid/{billId}")
+    public ResponseEntity<BillDTO> markBillAsPaid(@PathVariable Long billId,
+                                                  @AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) throw new RuntimeException("User not authenticated");
+
+        String email = userDetails.getUsername();
+        Customer c = customerRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Customer not found"));
+
+        Bill bill = billService.getBillById(billId);
+        if (bill == null) throw new RuntimeException("Bill not found");
+        if (!bill.getCustomer().getCustomerId().equals(c.getCustomerId()))
+            throw new RuntimeException("Access denied: Cannot pay another customer's bill");
+
+        Bill updated = billService.markBillAsPaid(billId);
+        return ResponseEntity.ok(billService.toDTO(updated)); // return DTO only
+    }
+}

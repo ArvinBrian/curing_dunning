@@ -1,0 +1,10 @@
+package com.example.curingdunning.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import com.curingdunning.model.Bill;
+import java.util.List;
+
+public interface BillRepository extends JpaRepository<Bill, Long> {
+    List<Bill> findByCustomerId(Long customerId);
+    List<Bill> findByStatus(String status);
+}

@@ -25,16 +25,21 @@ public class DashboardService {
 
     @Autowired 
     private CustomerRepository customerRepo;
+
     @Autowired 
     private ServiceSubscriptionRepository subRepo;
+
     @Autowired 
     private DunningEventService eventService;
+
     @Autowired 
     private CuringActionService actionService;
+
     @Autowired
     private DunningRuleRepository ruleRepo; // needed for mapping rules to events
 
     public DashboardDTO getDashboardForCustomer(String email) {
+        // fetch customer
         Customer c = customerRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
 
@@ -42,7 +47,7 @@ public class DashboardService {
         dash.setCustomerId(c.getCustomerId());
         dash.setEmail(c.getEmail());
 
-        // services
+        // fetch services
         List<ServiceSubscription> subs = subRepo.findByCustomerCustomerId(c.getCustomerId());
         List<ServiceStatusDTO> serviceDTOs = subs.stream().map(s -> {
             ServiceStatusDTO sd = new ServiceStatusDTO();
@@ -50,45 +55,51 @@ public class DashboardService {
             sd.setNextDueDate(s.getNextDueDate());
             sd.setCurrentStatus(s.getStatus()); // ACTIVE / BLOCKED
 
+            // days until due
             long daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), s.getNextDueDate());
             sd.setDaysUntilDue((int) daysUntil);
 
-            if ("BLOCKED".equals(s.getStatus())) {
+            // blocked service handling
+            if ("BLOCKED".equalsIgnoreCase(s.getStatus())) {
                 sd.setStatusText("Service blocked due to overdue or limit reached");
 
-                // check if there is a pending dunning event
+                // pending event for this service
                 Optional<DunningEventDTO> pendingEvent = eventService.getEventsForCustomer(c.getCustomerId())
                         .stream()
-                        .filter(e -> e.getServiceName().equals(s.getServiceName()) && "PENDING".equals(e.getStatus()))
+                        .filter(e -> e.getServiceName().equals(s.getServiceName()) && "PENDING".equalsIgnoreCase(e.getStatus()))
                         .findFirst();
 
                 if (pendingEvent.isPresent()) {
-                    // find the rule that caused this event
+                    DunningEventDTO event = pendingEvent.get();
+
+                    // find matching rule that caused this event
                     List<DunningRule> rules = ruleRepo.findByServiceName(s.getServiceName());
-                    rules = rules.stream()
-                            .filter(r -> pendingEvent.get().getDaysOverdue() >= (r.getOverdueDays() != null ? r.getOverdueDays() : 0))
+                    List<DunningRule> applicableRules = rules.stream()
+                            .filter(r -> r.getOverdueDays() != null && event.getDaysOverdue() >= r.getOverdueDays())
                             .sorted(Comparator.comparingInt(r -> r.getPriority() != null ? r.getPriority() : Integer.MAX_VALUE))
                             .collect(Collectors.toList());
 
-                    if (!rules.isEmpty()) {
-                        sd.setPendingAction(rules.get(0).getAction()); // recommended curing action
+                    if (!applicableRules.isEmpty()) {
+                        sd.setPendingAction(applicableRules.get(0).getAction()); // recommended curing action
                     }
                 }
 
             } else {
+                // ACTIVE service
                 sd.setStatusText(daysUntil < 0 ? Math.abs(daysUntil) + " days overdue" : "Due in " + daysUntil + " days");
                 sd.setPendingAction(null);
             }
 
             return sd;
         }).collect(Collectors.toList());
+
         dash.setServices(serviceDTOs);
 
-        // events
+        // all events for customer
         List<DunningEventDTO> events = eventService.getEventsForCustomer(c.getCustomerId());
         dash.setEvents(events);
 
-        // available actions: for each service collect actions
+        // available actions
         List<CuringActionDTO> actions = actionService.getAvailableActionsForCustomer(c.getCustomerId());
         dash.setAvailableActions(actions);
 

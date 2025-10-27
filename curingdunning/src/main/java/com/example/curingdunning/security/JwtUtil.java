@@ -13,22 +13,28 @@ import io.jsonwebtoken.security.Keys;
 @Component
 public class JwtUtil {
 
-    private static final String SECRET_KEY = "CuringDunningSecretKey123CuringDunningSecretKey123"; // at least 32 chars
+    private static final String SECRET_KEY = "ThisIsAVeryLongSecretKeyForCuringDunning"; 
     private static final long EXPIRATION_TIME = 1000 * 60 * 60; // 1 hour
 
-    private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes()); // proper HS256 key
+    private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
 
-    public String generateToken(String email) {
+    // Updated to include role
+    public String generateToken(String email, String role) {
         return Jwts.builder()
                 .setSubject(email)
+                .claim("role", role) // add role as claim
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(key)  // <- this works with 0.11.x
+                .signWith(key)
                 .compact();
     }
 
     public String extractEmail(String token) {
         return extractClaims(token).getSubject();
+    }
+
+    public String extractRole(String token) {
+        return (String) extractClaims(token).get("role");
     }
 
     public boolean validateToken(String token) {

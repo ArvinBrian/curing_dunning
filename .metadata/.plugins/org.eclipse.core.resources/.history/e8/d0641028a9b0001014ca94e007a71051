@@ -1,0 +1,29 @@
+package com.example.curingdunning.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.entity.Admin;
+import com.example.curingdunning.repository.AdminRepository;
+import com.example.curingdunning.security.JwtUtil;
+
+@Service
+public class AdminService {
+
+    @Autowired private AdminRepository repo;
+    @Autowired private JwtUtil jwtUtil;
+
+    public String login(String email, String password) {
+        Admin admin = repo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Admin not found"));
+
+        if (!password.equals(admin.getPassword())) { // replace with hashed check in prod
+            throw new RuntimeException("Invalid credentials");
+        }
+
+        return jwtUtil.generateToken(admin.getEmail());
+    }
+
+    // existing methods: createRule, updateRule, deleteRule, overrideSubscription...
+}
+
