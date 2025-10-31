@@ -28,6 +28,8 @@ public class DunningEvent {
 
     // days overdue at time of creation
     private int daysOverdue;
+    
+    private LocalDateTime originalDueDate; // The date the associated bill was due
 
     // e.g. PENDING, NOTIFIED, RESOLVED
     @Column(nullable = false)
@@ -39,8 +41,9 @@ public class DunningEvent {
 
     private LocalDateTime resolvedAt;
 
-    // optional link to applied action id / details
-    private Long appliedActionId;
+    @ManyToOne
+    @JoinColumn(name = "rule_id", nullable = true)
+    private DunningRule appliedRule;
 
     // getters/setters
 }

@@ -20,7 +20,7 @@ import com.example.curingdunning.entity.Bill;
 import com.example.curingdunning.entity.Customer;
 import com.example.curingdunning.exception.BillNotFoundException;
 import com.example.curingdunning.repository.CustomerRepository;
-import com.example.curingdunning.service.BillService;
+import com.example.curingdunning.service.BillServiceImpl;
 
 import jakarta.validation.Valid;
 
@@ -29,10 +29,19 @@ import jakarta.validation.Valid;
 public class BillController {
 
     @Autowired
-    private BillService billService;
+    private BillServiceImpl billService;
     
     @Autowired
     private CustomerRepository customerRepo;
+    
+    //new endpoint to expose autobill generate BEFORE due date
+ // in BillController.java
+    @PostMapping("/generate-upcoming")
+    public ResponseEntity<String> generateUpcomingBills() {
+        billService.processScheduledBillingAndOverdues();
+        return ResponseEntity.ok("Upcoming bills generated successfully");
+    }
+
 
     // 🧾 Create a new bill
     @PostMapping

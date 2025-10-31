@@ -1,0 +1,78 @@
+package com.example.curingdunning.service;
+
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ChatResponse;
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.repository.BillRepository;
+import com.example.curingdunning.repository.CustomerRepository;work.stereotype.Service;
+
+@Service
+public class RuleBasedResponder {
+
+    private final BillRepository billRepository;
+    private final CustomerRepository customerRepository;
+
+    public RuleBasedResponder(BillRepository billRepository, CustomerRepository customerRepository) {
+        this.billRepository = billRepository;
+        this.customerRepository = customerRepository;
+    }
+
+    public ChatResponse handleOption(Long customerId, int option) {
+        switch (option) {
+            case 1:
+                return currentBills(customerId);
+            case 2:
+                return currentPlan(customerId);
+            case 3:
+                return totalDue(customerId);
+            case 4:
+                return upcomingOrOverdue(customerId);
+            default:
+                return new ChatResponse("Invalid option. Please enter a number between 1 and 5.", false, false);
+        }
+    }
+
+    private ChatResponse currentBills(Long customerId) {
+        List<Bill> bills = billRepository.findCurrentBillsByCustomerId(customerId);
+        if (bills == null || bills.isEmpty()) {
+            return new ChatResponse("You have no current bills.", false, true);
+        }
+        String msg = "Your current bills: " + bills.stream()
+                .map(b -> b.getDescription() + " ₹" + b.getAmount())
+                .collect(Collectors.joining(", "));
+        // After rule response, show menu again (frontend will show menu) — we include endConversation=false
+        return new ChatResponse(msg, false, false);
+    }
+
+    private ChatResponse currentPlan(Long customerId) {
+        Optional<Customer> c = customerRepository.findById(customerId);
+        if (c.isEmpty()) return new ChatResponse("Could not find your plan information.", false, false);
+        Customer cust = c.get();
+        String msg = String.format("You are on the %s plan. Status: %s", cust.getPlanName(), cust.getStatus());
+        return new ChatResponse(msg, false, false);
+    }
+
+    private ChatResponse totalDue(Long customerId) {
+        double total = billRepository.getTotalDueForCustomer(customerId);
+        return new ChatResponse(String.format("Your total due is ₹%.2f.", total), false, false);
+    }
+
+    private ChatResponse upcomingOrOverdue(Long customerId) {
+        List<Bill> list = billRepository.findUpcomingOrOverdueByCustomerId(customerId);
+        if (list == null || list.isEmpty())
+            return new ChatResponse("No upcoming or overdue payments found.", false, false);
+
+        String msg = "Upcoming/Overdue: " + list.stream()
+                .map(b -> String.format("%s: ₹%.2f due %s%s", b.getDescription(), b.getAmount(), b.getDueDate(),
+                        b.isOverdue() ? " (OVERDUE)" : ""))
+                .collect(Collectors.joining("; "));
+        return new ChatResponse(msg, false, false);
+    }
+}

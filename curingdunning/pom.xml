@@ -67,6 +67,14 @@
 		    <artifactId>jakarta.validation-api</artifactId>
 		    <version>3.0.2</version>
 		</dependency>
+		
+		<!-- Spring AI (example, adapt to your BOM / Spring Boot version) -->
+		<!--<dependency>
+		  <groupId>org.springframework.experimental</groupId>
+		  <artifactId>spring-ai</artifactId>
+		  <version>0.2.0</version> 
+		</dependency>-->
+
 
 		
 		<dependency>

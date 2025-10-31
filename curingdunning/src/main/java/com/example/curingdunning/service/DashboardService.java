@@ -55,10 +55,22 @@ public class DashboardService {
             sd.setNextDueDate(s.getNextDueDate());
             sd.setCurrentStatus(s.getStatus()); // ACTIVE / BLOCKED
 
-            // days until due
-            long daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), s.getNextDueDate());
-            sd.setDaysUntilDue((int) daysUntil);
+         // <--- INSERT START -->
 
+            // Determine the date to use for calculation (use nextDueDate if present, fallback to nextPaymentDate)
+            LocalDate calculationDate = s.getNextDueDate() != null 
+                                      ? s.getNextDueDate() 
+                                      : s.getNextPaymentDate();
+
+            long daysUntil = Integer.MAX_VALUE; // Default to a very large number (or 0) if no date is found
+            
+            if (calculationDate != null) {
+                // days until due
+                daysUntil = ChronoUnit.DAYS.between(LocalDate.now(), calculationDate);
+            }
+            sd.setDaysUntilDue((int) daysUntil);
+            
+            // <--- INSERT END -->
             // blocked service handling
             if ("BLOCKED".equalsIgnoreCase(s.getStatus())) {
                 sd.setStatusText("Service blocked due to overdue or limit reached");

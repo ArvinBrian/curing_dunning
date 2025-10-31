@@ -1,0 +1,143 @@
+package com.example.curingdunning.service;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ChatResponse;
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.BillRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+@Service
+//@RequiredArgsConstructor
+public class ChatService {
+	@Autowired
+    private  CustomerRepository customerRepository;
+	@Autowired
+    private  BillRepository billRepository;
+	@Autowired
+	private ServiceSubscriptionRepository serviceSubscriptionRepository;
+
+
+    public ChatResponse handleUserMessage(String message, Long customerId) {
+        message = message.trim().toLowerCase();
+
+        // Main menu
+        if (message.equals("hi") || message.equals("hello")) {
+            return new ChatResponse(
+                "Hi! What do you need help with today?\n1️⃣ Current plan\n2️⃣ Current bills\n3️⃣ Upcoming or overdue bills\n4️⃣ Total due amount",
+                true,
+                false
+            );
+        }
+
+        // User selections
+        switch (message) {
+        case "1":
+            return currentPlan(customerId);
+        case "2":
+            return currentBills(customerId);
+        case "3":
+            return upcomingOrOverdue(customerId);
+        case "4":
+            return totalDue(customerId);
+        default:
+            return new ChatResponse("Sorry, I didn’t understand. Type 'hi' to start again.", false, false);
+    }
+
+    }
+
+    private ChatResponse currentPlan(Long customerId) {
+        // Fetch all subscriptions for the given customer
+        List<ServiceSubscription> subscriptions = serviceSubscriptionRepository.findByCustomerCustomerId(customerId);
+
+        if (subscriptions == null || subscriptions.isEmpty()) {
+            return new ChatResponse("No active service subscriptions found for your account.", false, false);
+        }
+
+        // Filter only ACTIVE (not suspended) plans
+        List<ServiceSubscription> activePlans = subscriptions.stream()
+                .filter(sub -> !"SUSPENDED".equalsIgnoreCase(sub.getStatus()))
+                .collect(Collectors.toList());
+
+        if (activePlans.isEmpty()) {
+            return new ChatResponse("You have no active plans at the moment.", false, false);
+        }
+
+        // Build response message neatly
+        StringBuilder sb = new StringBuilder("📱 Your active plans:\n");
+        for (ServiceSubscription plan : activePlans) {
+            sb.append("- ").append(plan.getServiceName())
+              .append(" (").append(plan.getPlanType()).append(")")
+              .append(": ₹").append(plan.getDueAmount())
+              .append(", Next due: ").append(plan.getNextDueDate())
+              .append("\n");
+        }
+
+        return new ChatResponse(sb.toString(), false, false);
+    }
+
+
+
+
+    public ChatResponse currentBills(Long customerId) {
+        List<Bill> bills = billRepository.findByCustomerCustomerIdAndStatusNot(customerId, "PAID");
+
+        if (bills.isEmpty()) {
+            return new ChatResponse("You have no unpaid bills. ✅", false, false);
+        }
+
+        StringBuilder sb = new StringBuilder("Here are your current unpaid bills:\n");
+        for (Bill bill : bills) {
+            sb.append("- ").append(bill.getServiceName())
+              .append(": ₹").append(bill.getAmount())
+              .append(", Due ").append(bill.getDueDate())
+              .append(", Status: ").append(bill.getStatus())
+              .append("\n");
+        }
+
+        return new ChatResponse(sb.toString(), false, false);
+    }
+
+
+    public ChatResponse upcomingOrOverdue(Long customerId) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime nextWeek = now.plusDays(7);
+
+        List<Bill> bills = billRepository.findUpcomingOrOverdue(customerId, now, nextWeek);
+
+        if (bills.isEmpty()) {
+            return new ChatResponse("No upcoming or overdue bills. 🎉", false, false);
+        }
+
+        StringBuilder sb = new StringBuilder("Here are your upcoming or overdue bills:\n");
+        for (Bill bill : bills) {
+            sb.append("- ").append(bill.getServiceName())
+              .append(": ₹").append(bill.getAmount())
+              .append(", Due ").append(bill.getDueDate())
+              .append(", Status: ").append(bill.getStatus())
+              .append("\n");
+        }
+
+        return new ChatResponse(sb.toString(), false, false);
+    }
+
+
+
+    public ChatResponse totalDue(Long customerId) {
+        Double total = billRepository.sumAmountByCustomerIdAndStatusNot(customerId, "PAID");
+
+        if (total == null || total == 0) {
+            return new ChatResponse("🎉 You have no outstanding payments!", false, false);
+        }
+
+        return new ChatResponse("💰 Your total due amount is ₹" + total, false, false);
+    }
+
+}

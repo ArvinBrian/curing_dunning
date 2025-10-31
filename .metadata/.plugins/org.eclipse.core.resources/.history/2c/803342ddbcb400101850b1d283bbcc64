@@ -1,0 +1,320 @@
+package com.example.curingdunning.service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.BillDTO;
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.entity.PlanType;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.exception.CustomerNotFoundException;
+import com.example.curingdunning.repository.BillRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Service
+@Slf4j
+public class BillServiceImpl implements BillService {
+
+	@Autowired
+	private BillRepository billRepo;
+
+	@Autowired
+	private CustomerRepository customerRepo;
+
+	@Autowired
+	private DunningEventRepository eventRepo;
+
+	@Autowired
+	private ServiceSubscriptionRepository subRepo;
+
+	@Autowired
+	private DunningEventService dunningEventService;
+
+	@Scheduled(fixedRate = 86400000) // every 24 hours
+	public void processScheduledBillingAndOverdues() {
+		LocalDate today = LocalDate.now();
+
+		// 1. ✅ Generate Upcoming/End-of-Cycle Bills
+		List<Customer> customers = customerRepo.findAll();
+
+		for (Customer customer : customers) {
+			List<ServiceSubscription> subscriptions = subRepo
+					.findByCustomerCustomerIdAndStatus(customer.getCustomerId(), "ACTIVE");
+
+			for (ServiceSubscription sub : subscriptions) {
+				LocalDate nextPaymentDate = sub.getNextPaymentDate();
+				if (nextPaymentDate == null)
+					continue;
+
+				long daysUntilPayment = ChronoUnit.DAYS.between(today, nextPaymentDate);
+				LocalDateTime dueDateTime = nextPaymentDate.atStartOfDay();
+
+				// 🟣 POSTPAID BILLING (End of Cycle or Overdue Cycle)
+				if (sub.getPlanType() == PlanType.POSTPAID) {
+					// Check if the current cycle has ended (or is overdue)
+					if (!today.isBefore(nextPaymentDate)) {
+
+						// Check for bill existence based on the specific cycle date (nextPaymentDate)
+						boolean exists = billRepo.existsByCustomerCustomerIdAndServiceNameAndDueDate(
+								customer.getCustomerId(), sub.getServiceName(), dueDateTime);
+
+						// If a bill already exists for this cycle, skip generation. Dunning handles
+						// overdue status.
+						if (exists) {
+							log.info("Postpaid cycle {} already billed/checked. Skipping generation.", nextPaymentDate);
+							continue;
+						}
+
+						// 💡 Usage Calculation
+						BigDecimal totalAmount = BigDecimal.ZERO;
+						totalAmount = totalAmount.add(BigDecimal.valueOf(sub.getCall_usage_minutes() * 0.5));
+						totalAmount = totalAmount.add(BigDecimal.valueOf(sub.getData_usage_gb() * 10));
+						totalAmount = totalAmount.add(BigDecimal.valueOf(sub.getSms_count() * 0.25));
+
+						// 🔥 FIX: Only create a bill if there is usage (totalAmount > 0).
+						if (totalAmount.compareTo(BigDecimal.ZERO) > 0) {
+
+							Bill bill = createBaseBill(customer, sub, totalAmount, dueDateTime.plusDays(7), "PENDING",
+									"Postpaid bill for usage period ending " + nextPaymentDate);
+							billRepo.save(bill);
+							log.info("📅 Postpaid bill generated with amount {}. Cycle moved.", totalAmount);
+						} else {
+							// FIX: Sub 5 was causing issues here. It had $0 usage, but the cycle was
+							// overdue.
+							// We must move the cycle forward so we don't try to bill this $0 cycle again.
+							log.info("Skipping $0 Postpaid bill for cycle {}. Moving cycle forward.", nextPaymentDate);
+						}
+
+						// 🔥 CRITICAL FIX: Cycle Move. MUST happen immediately after cycle end
+						// to prevent re-triggering this date, regardless of bill amount.
+						sub.setCall_usage_minutes(0);
+						sub.setData_usage_gb(0);
+						sub.setSms_count(0);
+						sub.setLastPaymentDate(nextPaymentDate);
+						sub.updateNextPaymentDate(); // Moves nextPaymentDate forward
+						subRepo.save(sub);
+					}
+				}
+
+				// 🟢 PREPAID BILLING (Upcoming Notification)
+				else if (sub.getPlanType() == PlanType.PREPAID) {
+					// Generate if within 5 days of next due date, but not already overdue
+					// (daysUntilPayment >= 0)
+					if (daysUntilPayment >= 0 && daysUntilPayment <= 5) {
+						if (!billRepo.existsByCustomerCustomerIdAndServiceNameAndDueDate(customer.getCustomerId(),
+								sub.getServiceName(), dueDateTime)) {
+
+							// Amount comes from the subscription's due amount
+							BigDecimal amount = sub.getDueAmount() != null ? sub.getDueAmount() : BigDecimal.ZERO;
+
+							Bill bill = createBaseBill(customer, sub, amount, dueDateTime, "PENDING",
+									"Generated 5 days before due date");
+							billRepo.save(bill);
+
+							log.info("✅ Prepaid upcoming bill generated...");
+						}
+					}
+				}
+			}
+		}
+
+		// --- SECTION 2 AND 3 REMAIN UNCHANGED (as they are correct for Overdue Bill
+		// Generation) ---
+
+		// 2. 🚨 Generate Overdue Bills (From Dunning Events)
+		List<DunningEvent> pendingEvents = eventRepo.findByStatus("PENDING");
+
+		for (DunningEvent ev : pendingEvents) {
+			// ... (existing logic for creating overdue bills from events) ...
+			// This section is correct assuming DunningEventService is fixed.
+
+			if (ev.getOriginalDueDate() == null) {
+				log.warn("Skipping DunningEvent ID {} due to missing originalDueDate.", ev.getId());
+				continue;
+			}
+
+			if (billRepo.existsByDunningEvent(ev)) {
+				log.info("Skipping duplicate bill for event ID={}", ev.getId());
+				continue;
+			}
+
+			Customer c = ev.getCustomer();
+
+			// Use the OriginalDueDate (which is the sub's overdue cycle date) as the unique
+			// identifier
+			LocalDate cycleEndDate = ev.getOriginalDueDate().toLocalDate();
+
+			ServiceSubscription sub = subRepo.findByCustomerCustomerIdAndServiceNameAndNextPaymentDate(
+					c.getCustomerId(), ev.getServiceName(), cycleEndDate // <-- This ensures we find the *specific*
+																			// overdue subscription
+			).orElse(null);
+
+			BigDecimal amount = (sub != null && sub.getDueAmount() != null) ? sub.getDueAmount()
+					: BigDecimal.valueOf(1000); // Default amount fallback
+
+			// Bill creation
+			Bill b = new Bill();
+			b.setCustomer(c);
+			b.setServiceName(ev.getServiceName());
+			b.setAmount(amount);
+			b.setDueDate(ev.getOriginalDueDate());
+			b.setStatus("OVERDUE");
+			b.setCreatedAt(LocalDateTime.now());
+
+			long daysOverdue = ChronoUnit.DAYS.between(b.getDueDate().toLocalDate(), today);
+			b.setOverdueDays((int) daysOverdue);
+
+			b.setDescription("Generated from overdue event triggered on " + ev.getCreatedAt().toLocalDate());
+			b.setDunningEvent(ev);
+			billRepo.save(b);
+
+			log.info("🚨 Overdue bill generated for customer={} service={}", c.getCustomerId(), ev.getServiceName());
+		}
+
+		// 3. ⏰ Auto Mark Bills Overdue
+		autoMarkOverdueBills();
+
+		log.info("💸 Scheduled billing and dunning cycle completed.");
+	}
+
+	// Helper method to reduce duplicate code
+	private Bill createBaseBill(Customer customer, ServiceSubscription sub, BigDecimal amount, LocalDateTime dueDate,
+			String status, String description) {
+		Bill bill = new Bill();
+		bill.setCustomer(customer);
+		bill.setServiceName(sub.getServiceName());
+		bill.setAmount(amount);
+		bill.setDueDate(dueDate);
+		bill.setStatus(status);
+		bill.setCreatedAt(LocalDateTime.now());
+		bill.setOverdueDays(0);
+		bill.setDescription(description);
+		return bill;
+	}
+	// Note: You need to add a findFirstByCustomerCustomerIdAndServiceName(Long
+	// customerId, String serviceName)
+	// method to your ServiceSubscriptionRepository interface.
+
+	// ✅ Automatically mark overdue bills
+	@Scheduled(fixedRate = 86400000)
+	public void autoMarkOverdueBills() {
+		List<Bill> bills = billRepo.findAll();
+		LocalDateTime now = LocalDateTime.now();
+
+		for (Bill bill : bills) {
+			if ("PENDING".equalsIgnoreCase(bill.getStatus()) && bill.getDueDate().isBefore(now)) {
+				bill.setStatus("OVERDUE");
+				long daysOverdue = java.time.Duration.between(bill.getDueDate(), now).toDays();
+				bill.setOverdueDays((int) daysOverdue);
+				billRepo.save(bill);
+
+				log.info("Bill marked as overdue: {} service={} overdueDays={}", bill.getBillId(),
+						bill.getServiceName(), bill.getOverdueDays());
+			}
+		}
+	}
+
+	@Override
+	public Bill createBill(Bill bill) {
+		if (bill.getCustomer() == null || bill.getCustomer().getCustomerId() == null) {
+			throw new CustomerNotFoundException("Customer is required for bill creation");
+		}
+		return billRepo.save(bill);
+	}
+
+	@Override
+	public Bill getBillById(Long id) {
+		return billRepo.findById(id).orElse(null);
+	}
+
+	@Override
+	public List<Bill> getBillsByCustomer(Long customerId) {
+		return billRepo.findByCustomerCustomerId(customerId);
+	}
+
+	@Override
+	public List<Bill> getAllBills() {
+		return billRepo.findAll();
+	}
+
+	@Override
+	public List<BillDTO> getCurrentBills(Long customerId) {
+		if (!customerRepo.existsById(customerId)) {
+			throw new CustomerNotFoundException("Customer not found: " + customerId);
+		}
+		List<Bill> bills = billRepo.findByCustomerCustomerIdAndStatus(customerId, "PENDING");
+		return bills.stream().map(this::toDTO).collect(Collectors.toList());
+	}
+
+	@Override
+	public List<BillDTO> getPastBills(Long customerId) {
+		if (!customerRepo.existsById(customerId)) {
+			throw new CustomerNotFoundException("Customer not found: " + customerId);
+		}
+		List<Bill> bills = billRepo.findByCustomerCustomerIdAndStatus(customerId, "PAID");
+		return bills.stream().map(this::toDTO).collect(Collectors.toList());
+	}
+
+	@Override
+	public BillDTO toDTO(Bill bill) {
+		BillDTO dto = new BillDTO();
+		dto.setBillId(bill.getBillId());
+		dto.setCustomerId(bill.getCustomer().getCustomerId());
+		dto.setServiceName(bill.getServiceName());
+		dto.setAmount(bill.getAmount());
+		dto.setStatus(bill.getStatus());
+		dto.setDueDate(bill.getDueDate());
+		dto.setPaidAt(bill.getPaymentDate());
+		dto.setDaysOverdue(bill.getOverdueDays());
+//        dto.setPlanType(subRepo.getPlanType().name());
+		return dto;
+	}
+
+	@Override
+	public Bill markBillAsPaid(Bill bill) {
+		if (bill != null) {
+			bill.setPaid(true);
+			bill.setPaymentDate(LocalDateTime.now());
+			bill.setStatus("PAID");
+			billRepo.save(bill);
+
+			// --- 🔧 CURING LOGIC ---
+			Customer customer = bill.getCustomer();
+			List<DunningEvent> openEvents = eventRepo.findByCustomerCustomerIdAndStatus(customer.getCustomerId(),
+					"PENDING");
+			for (DunningEvent ev : openEvents) {
+				ev.setStatus("RESOLVED");
+				ev.setResolvedAt(LocalDateTime.now());
+			}
+			eventRepo.saveAll(openEvents);
+
+			// Reactivate any blocked services
+			List<ServiceSubscription> subs = subRepo.findByCustomerCustomerId(customer.getCustomerId());
+			for (ServiceSubscription sub : subs) {
+				if ("BLOCKED".equals(sub.getStatus())) {
+					sub.setStatus("ACTIVE");
+				}
+				sub.setLastPaymentDate(LocalDate.now());
+				sub.updateNextPaymentDate();
+			}
+			subRepo.saveAll(subs);
+
+			return bill;
+		}
+		return null;
+	}
+}

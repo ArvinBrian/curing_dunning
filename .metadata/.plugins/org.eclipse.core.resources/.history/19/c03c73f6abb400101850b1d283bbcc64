@@ -1,0 +1,234 @@
+package com.example.curingdunning.service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.BillDTO;
+import com.example.curingdunning.entity.Bill;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.BillRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+import lombok.extern.slf4j.Slf4j;
+
+@Service
+@Slf4j
+public class BillServiceImpl implements BillService {
+
+    @Autowired
+    private BillRepository billRepo;
+
+    @Autowired
+    private CustomerRepository customerRepo;
+    
+    @Autowired
+    private DunningEventRepository eventRepo;
+
+    @Autowired
+    private ServiceSubscriptionRepository subRepo;
+    
+    @Autowired
+    private DunningEventService dunningEventService;
+
+    @Scheduled(fixedRate = 86400000)
+    public void generateBillsFromPendingEvents() {
+        List<DunningEvent> pendingEvents = eventRepo.findByStatus("PENDING");
+
+        for (DunningEvent ev : pendingEvents) {
+            Customer c = ev.getCustomer();
+            String service = ev.getServiceName();
+
+            // avoid duplicates
+            boolean exists = billRepo.existsByCustomerCustomerIdAndServiceNameAndDueDate(
+                c.getCustomerId(),
+                service,
+                ev.getCreatedAt().toLocalDate().atStartOfDay()
+            );
+
+            if (!exists) {
+                Bill b = new Bill();
+                b.setCustomer(c);
+                b.setServiceName(service);
+                b.setAmount(BigDecimal.valueOf(1000)); // or use sub.getDueAmount()
+                b.setDueDate(ev.getCreatedAt()); // approximate the missed due date
+                b.setStatus("OVERDUE");
+                b.setCreatedAt(LocalDateTime.now());
+
+                // Calculate overdueDays based on the due date of the bill
+                long daysOverdue = ChronoUnit.DAYS.between(b.getDueDate().toLocalDate(), LocalDate.now());
+                b.setOverdueDays((int) daysOverdue);
+
+                b.setDescription("Generated from overdue event");
+                billRepo.save(b);
+            }
+        }
+    }
+
+    @Scheduled(fixedRate = 86400000) // every 24 hours
+    public void autoGenerateBills() {
+        LocalDate today = LocalDate.now();
+
+        // ✅ 1. Generate upcoming bills (next 5 days)
+        List<Customer> customers = customerRepo.findAll();
+
+        for (Customer customer : customers) {
+            List<ServiceSubscription> subscriptions =
+                    subRepo.findByCustomerCustomerIdAndStatus(customer.getCustomerId(), "ACTIVE");
+
+            for (ServiceSubscription sub : subscriptions) {
+                LocalDate nextPaymentDate = sub.getNextPaymentDate();
+                if (nextPaymentDate == null) continue;
+
+                long daysUntilPayment = ChronoUnit.DAYS.between(today, nextPaymentDate);
+
+                // 🔹 Generate bills 5 days *before* due date
+                if (daysUntilPayment <= 5 && daysUntilPayment >= 0) {
+                    boolean exists = billRepo.existsByCustomerCustomerIdAndServiceNameAndDueDate(
+                            customer.getCustomerId(),
+                            sub.getServiceName(),
+                            nextPaymentDate.atStartOfDay()
+                    );
+
+                    if (!exists) {
+                        Bill bill = new Bill();
+                        bill.setCustomer(customer);
+                        bill.setServiceName(sub.getServiceName());
+                        bill.setAmount(sub.getDueAmount() != null ? sub.getDueAmount() : BigDecimal.ZERO);
+                        bill.setDueDate(nextPaymentDate.atStartOfDay());
+                        bill.setStatus("PENDING");
+                        bill.setCreatedAt(LocalDateTime.now());
+                        bill.setOverdueDays(0);
+                        bill.setDescription("Generated 5 days before due date");
+
+                        billRepo.save(bill);
+
+                        log.info("✅ Upcoming bill generated for {} (service: {}) due on {}",
+                                customer.getName(), sub.getServiceName(), nextPaymentDate);
+                    }
+                }
+            }
+        }
+
+        // ✅ 2. Generate overdue bills (based on Dunning Events)
+        List<DunningEvent> pendingEvents = eventRepo.findByStatus("PENDING");
+
+        for (DunningEvent ev : pendingEvents) {
+            Customer c = ev.getCustomer();
+            String service = ev.getServiceName();
+
+            // Avoid duplicate bills for the same overdue event
+            boolean exists = billRepo.existsByDunningEvent(ev);
+
+            if (exists) {
+                log.info("Skipping duplicate bill for event ID={} (customer={})", ev.getId(), c.getCustomerId());
+                continue;
+            }
+
+            if (!exists) {
+                Bill b = new Bill();
+                b.setCustomer(c);
+                b.setServiceName(service);
+
+                ServiceSubscription sub = subRepo
+                        .findFirstByCustomerCustomerIdAndServiceName(c.getCustomerId(), service)
+                        .orElse(null);
+
+                b.setAmount(sub != null ? sub.getDueAmount() : BigDecimal.valueOf(1000));
+                b.setDueDate(ev.getCreatedAt()); // approximate the original due date
+                b.setStatus("OVERDUE");
+                b.setCreatedAt(LocalDateTime.now());
+
+                // Calculate overdueDays based on Dunning Event
+                long daysOverdue = ChronoUnit.DAYS.between(b.getDueDate().toLocalDate(), LocalDate.now());
+                b.setOverdueDays((int) daysOverdue);
+
+                b.setDescription("Generated from overdue event");
+                b.setDunningEvent(ev);
+                billRepo.save(b);
+
+                log.info("Overdue bill generated for customer={} service={} daysOverdue={}",
+                        c.getCustomerId(), service, ev.getDaysOverdue());
+            }
+        }
+
+        log.info("Auto bill generation cycle completed successfully at {}", LocalDateTime.now());
+    }
+
+    // ✅ Automatically mark overdue bills
+    @Scheduled(fixedRate = 86400000)
+    public void autoMarkOverdueBills() {
+        List<Bill> bills = billRepo.findAll();
+        LocalDateTime now = LocalDateTime.now();
+
+        for (Bill bill : bills) {
+            if ("PENDING".equalsIgnoreCase(bill.getStatus()) && bill.getDueDate().isBefore(now)) {
+                bill.setStatus("OVERDUE");
+                long daysOverdue = java.time.Duration.between(bill.getDueDate(), now).toDays();
+                bill.setOverdueDays((int) daysOverdue);
+                billRepo.save(bill);
+
+                log.info("Bill marked as overdue: {} service={} overdueDays={}",
+                         bill.getBillId(), bill.getServiceName(), bill.getOverdueDays());
+            }
+        }
+    }
+
+	@Override
+	public Bill createBill(Bill bill) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Bill getBillById(Long id) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Bill> getBillsByCustomer(Long customerId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<Bill> getAllBills() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<BillDTO> getCurrentBills(Long customerId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public List<BillDTO> getPastBills(Long customerId) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public BillDTO toDTO(Bill bill) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public Bill markBillAsPaid(Bill bill) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

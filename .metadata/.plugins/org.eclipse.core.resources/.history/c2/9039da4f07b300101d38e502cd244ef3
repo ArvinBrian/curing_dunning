@@ -1,0 +1,27 @@
+package com.example.curingdunning.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.ChatResponse;
+import com.example.curingdunning.service.ChatService;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/chat")
+@RequiredArgsConstructor
+public class ChatController {
+
+    private final ChatService chatService;
+
+    @PostMapping
+    public ResponseEntity<ChatResponse> chat(@RequestParam Long customerId,@RequestBody String message) {
+        ChatResponse response = chatService.handleUserMessage(message, customerId);
+        return ResponseEntity.ok(response);
+    }
+}

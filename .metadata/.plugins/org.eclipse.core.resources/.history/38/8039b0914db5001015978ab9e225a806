@@ -1,0 +1,314 @@
+package com.example.curingdunning.service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.DunningEventDTO;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.entity.PlanType;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+import com.example.curingdunning.repository.DunningRuleRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+
+import jakarta.transaction.Transactional;
+
+@Service
+public class DunningEventService {
+
+    @Autowired 
+    private DunningEventRepository eventRepo;
+
+    @Autowired 
+    private DunningRuleRepository ruleRepo;
+
+    @Autowired 
+    private ServiceSubscriptionRepository subRepo;
+
+    @Autowired 
+    private CustomerRepository customerRepo;
+    
+    private BillService billService;
+    
+    @Autowired
+    @Lazy // <-- CRUCIAL: Tells Spring not to initialize BillService until it's actually needed.
+    public void setBillService(BillService billService) {
+        this.billService = billService;
+    }
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
+
+    /**
+     * Generate events for all customers by scanning subscriptions and rules.
+     * Supports mobile plans only, differentiates prepaid and postpaid.
+     */
+    
+    private DunningEventDTO toDto(DunningEvent event) {
+        DunningEventDTO dto = new DunningEventDTO();
+        dto.setEventId(event.getId());
+        dto.setServiceName(event.getServiceName());
+        dto.setDaysOverdue(event.getDaysOverdue());
+        dto.setStatus(event.getStatus());
+        dto.setCreatedAt(event.getCreatedAt());
+        return dto;
+    }
+
+    
+    public List<DunningEventDTO> getEventsForCustomer(Long customerId) {
+        // Fetch all events for the given customer, ordered by creation date
+        return eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customerId)
+                .stream()
+                .map(this::toDto) // Convert each event to a DTO
+                .collect(Collectors.toList()); // Collect them into a list
+    }
+    
+ // DunningEventService.java
+
+    public void generateEventsForAllCustomers() {
+        LocalDate today = LocalDate.now(); 
+        List<ServiceSubscription> subscriptions = subRepo.findAll(); 
+
+        for (ServiceSubscription subscription : subscriptions) {
+            
+            // This outer status check is good, it skips subscriptions that definitely shouldn't be processed.
+            String status = subscription.getStatus();
+
+            if ("INACTIVE".equals(status) || "RESOLVED".equals(status)) {
+                continue; 
+            }
+            
+            // 🔥 CRITICAL FIX: Wrap the processing logic in a try-catch to ensure the loop continues
+            try {
+                Customer customer = subscription.getCustomer();
+                PlanType planType = subscription.getPlanType();
+
+                if (planType == PlanType.POSTPAID) {
+                    // Dependency injection check: Ensure this.billService is set via the @Lazy setter
+                    handlePostpaid(subscription, customer, today, this.billService); 
+                } else if (planType == PlanType.PREPAID) {
+                    handlePrepaid(subscription, customer); 
+                }
+            } catch (Exception e) {
+                // Log the error with specific details and CONTINUE to the next subscription
+                log.error("🛑 Dunning event processing failed for subscription ID {} (Service: {}) due to error: {}", 
+                          subscription.getId(), subscription.getServiceName(), e.getMessage(), e);
+                continue; // Ensure the loop moves to the next subscription immediately
+            }
+        }
+    }
+
+    
+    @Transactional
+    public void handlePrepaid(ServiceSubscription sub, Customer customer) {
+        LocalDate today = LocalDate.now();  // Fetch today's date here
+
+        // Ensure nextDueDate is not null
+        LocalDate nextDueDate = sub.getNextPaymentDate();
+        if (nextDueDate == null) {
+            log.warn("No next due date for customer={} subscription={}", customer.getCustomerId(), sub.getServiceName());
+            return; // Handle the case where the nextDueDate is not set
+        }
+
+        long daysOverdue = ChronoUnit.DAYS.between(nextDueDate, today);
+        if (daysOverdue < 0) {
+            log.info("Subscription not overdue for customer={} subscription={} (days overdue: {})", 
+                     customer.getCustomerId(), sub.getServiceName(), daysOverdue);
+            return; // Not overdue yet, exit
+        }
+
+        // Fetch applicable rules
+        List<DunningRule> rules = ruleRepo.findByServiceNameAndPlanType(sub.getServiceName(), PlanType.PREPAID)
+                .stream()
+                .filter(r -> r.getOverdueDays() != null && daysOverdue >= r.getOverdueDays())
+                .sorted(Comparator.comparingInt(r -> r.getPriority() != null ? r.getPriority() : Integer.MAX_VALUE))
+                .collect(Collectors.toList());
+
+        if (rules.isEmpty()) {
+            log.info("No applicable rules found for customer={} subscription={} (days overdue: {})", 
+                     customer.getCustomerId(), sub.getServiceName(), daysOverdue);
+            return; // No applicable rules found, exit
+        }
+
+        DunningRule chosen = rules.get(rules.size() - 1); // Get the rule with the highest priority
+        log.info("Chosen rule for customer={} subscription={} (days overdue: {}): {} - action: {}", 
+                 customer.getCustomerId(), sub.getServiceName(), daysOverdue, chosen.getId(), chosen.getAction());
+
+        // Avoid duplicate events for the same rule/action
+        boolean exists = eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customer.getCustomerId())
+                .stream()
+                .anyMatch(e -> e.getServiceName().equals(sub.getServiceName())
+                        && !"RESOLVED".equals(e.getStatus())
+                        && e.getAppliedRule() != null
+                        && e.getAppliedRule().getAction().equals(chosen.getAction()));
+        if (exists) {
+            log.info("Event already exists for customer={} subscription={} with action={} - skipping", 
+                     customer.getCustomerId(), sub.getServiceName(), chosen.getAction());
+            return; // Skip if event already exists
+        }
+
+        // Create a new dunning event
+        DunningEvent ev = new DunningEvent();
+        ev.setCustomer(customer);
+        ev.setServiceName(sub.getServiceName());
+        ev.setDaysOverdue((int) daysOverdue);
+        
+     // 🔥 CRITICAL FIX: Set the original due date
+        nextDueDate = sub.getNextPaymentDate(); // Use nextPaymentDate
+        ev.setOriginalDueDate(nextDueDate.atStartOfDay());
+        
+        ev.setStatus("PENDING");
+        ev.setTriggeredBy("SYSTEM");
+        ev.setCreatedAt(LocalDateTime.now());
+        ev.setAppliedRule(chosen);
+        eventRepo.save(ev); // Save the event
+
+        // Apply action based on the rule
+        if ("THROTTLE_DATA".equals(chosen.getAction()) || "BAR_OUTGOING_CALLS".equals(chosen.getAction())) {
+            sub.setStatus("BLOCKED"); // Block the subscription for these actions
+            subRepo.save(sub); // Save the updated subscription
+            log.info("Applied action '{}' to customer={} subscription={} - status changed to BLOCKED", 
+                     chosen.getAction(), customer.getCustomerId(), sub.getServiceName());
+        }
+
+        log.info("Prepaid event created: customer={} daysOverdue={} rule={} action={}", 
+                 customer.getCustomerId(), daysOverdue, chosen.getId(), chosen.getAction());
+    }
+
+
+
+
+    @Transactional
+    public void handlePostpaid(ServiceSubscription sub, Customer customer, LocalDate today, BillService billService) {
+        LocalDate dueDate = sub.getNextPaymentDate();
+        long daysOverdue = ChronoUnit.DAYS.between(dueDate, today);
+
+//        // =======================================================
+//        // 1. END-OF-CYCLE (EOC) LOGIC: Bill Generation (Not Overdue)
+//        // =======================================================
+//        // Assume EOC generation is triggered X days before the due date (e.g., 5 days)
+//        final int EOC_TRIGGER_DAYS_BEFORE = 5; 
+//        long daysUntilDue = ChronoUnit.DAYS.between(today, dueDate); 
+//
+//        if (daysUntilDue >= 0 && daysUntilDue <= EOC_TRIGGER_DAYS_BEFORE) {
+//            // We call the BillService here to handle the EOC upcoming bill generation.
+//            // This must be done whether dunning is active or not.
+//            // If your BillService handles EOC logic, call it here.
+//            
+//            // This call MUST NOT create a dunning event or apply dunning actions.
+//            billService.generateUpcomingPostpaidBill(customer, sub, dueDate);
+//            log.info("Postpaid EOC Check: Bill generated/checked for upcoming due date: {}", dueDate);
+//        }
+
+        // =======================================================
+        // 2. DUNNING LOGIC: Overdue Check
+        // =======================================================
+        if (daysOverdue < 1) { // Check if subscription is truly overdue (1 or more days past due date)
+            return; // Exit if not overdue. The EOC check above already ran if applicable.
+        }
+        
+        // fetch applicable rules (Dunning logic remains mostly the same, focusing on rules)
+        List<DunningRule> rules = ruleRepo.findByServiceNameAndPlanType(sub.getServiceName(), PlanType.POSTPAID)
+                .stream()
+                .filter(r -> r.getOverdueDays() != null && daysOverdue >= r.getOverdueDays())
+                .sorted(Comparator.comparingInt(r -> r.getPriority() != null ? r.getPriority() : Integer.MAX_VALUE))
+                .collect(Collectors.toList());
+
+        if (rules.isEmpty()) {
+            log.warn("Postpaid Dunning: No rules found for service={} daysOverdue={}", sub.getServiceName(), daysOverdue);
+            return;
+        }
+
+        DunningRule chosen = rules.get(rules.size() - 1); // Highest priority rule
+
+        // avoid duplicate events for same rule/action
+        boolean exists = eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customer.getCustomerId())
+                .stream()
+                .anyMatch(e -> e.getServiceName().equals(sub.getServiceName())
+                            && !"RESOLVED".equals(e.getStatus())
+                            && e.getAppliedRule() != null
+                            && e.getAppliedRule().getAction().equals(chosen.getAction()));
+        if (exists) {
+            log.info("Postpaid Dunning: Skipping duplicate event for customer={} action={}", customer.getCustomerId(), chosen.getAction());
+            return;
+        }
+
+        // create event
+        DunningEvent ev = new DunningEvent();
+        ev.setCustomer(customer);
+        ev.setServiceName(sub.getServiceName());
+        ev.setDaysOverdue((int) daysOverdue);
+        ev.setStatus("PENDING");
+        ev.setTriggeredBy("SYSTEM");
+        ev.setCreatedAt(LocalDateTime.now());
+        ev.setAppliedRule(chosen);
+
+        // 🔥 FIX: Convert LocalDate (getNextPaymentDate) to LocalDateTime (at start of day)
+        ev.setOriginalDueDate(sub.getNextPaymentDate().atStartOfDay()); 
+
+        eventRepo.save(ev);
+
+        // Apply action (e.g., throttle speed, bar calls)
+        if ("THROTTLE_SPEED".equals(chosen.getAction()) || "BAR_OUTGOING_CALLS".equals(chosen.getAction())) {
+            sub.setStatus("BLOCKED"); // Assuming BLOCKED is the state for service restriction
+            subRepo.save(sub);
+        }
+
+        log.info("✅ Postpaid event created: customer={} daysOverdue={} rule={} action={}", 
+                 customer.getCustomerId(), daysOverdue, chosen.getId(), chosen.getAction());
+    }
+
+    // NOTE: You will need to update the caller method in DunningEventService:
+    // handlePostpaid(subscription, customer, today, billService);
+    
+
+
+    @Transactional
+    public void markResolved(Long eventId, Long ruleId) {
+        // Fetch the event
+        DunningEvent ev = eventRepo.findById(eventId)
+                .orElseThrow(() -> new RuntimeException("Event not found"));
+
+        // Fetch the applied rule
+        DunningRule rule = ruleRepo.findById(ruleId)
+                .orElseThrow(() -> new RuntimeException("Rule not found"));
+
+        // Update event details
+        ev.setStatus("RESOLVED");
+        ev.setResolvedAt(LocalDateTime.now());
+        ev.setAppliedRule(rule);
+        eventRepo.save(ev);
+
+        // Fetch customer's subscription
+        List<ServiceSubscription> subs = subRepo.findByCustomerCustomerIdAndServiceName(
+            ev.getCustomer().getCustomerId(),
+            ev.getServiceName()
+        );
+
+        if (subs.isEmpty()) {
+            throw new RuntimeException("Subscription not found");
+        }
+
+        ServiceSubscription sub = subs.get(0);
+        sub.setStatus("ACTIVE");
+        subRepo.save(sub);
+
+        log.info("Customer {} subscription {} reset to ACTIVE after resolving rule {}",
+                 ev.getCustomer().getCustomerId(), ev.getServiceName(), rule.getId());
+    }
+
+
+
+}

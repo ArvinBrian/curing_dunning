@@ -1,9 +1,0 @@
-import java.time.LocalDateTime;
-
-public class DunningEventDTO {
-    private Long eventId;
-    private String serviceName;
-    private int daysOverdue;
-    private String status;
-    private LocalDateTime createdAt;
-}

@@ -1,9 +1,0 @@
-import java.util.List;
-
-import org.springframework.data.jpa.repository.JpaRepository;
-
-import com.example.curingdunning.entity.CuringAction;
-
-public interface CuringActionRepository extends JpaRepository<CuringAction, Long> {
-    List<CuringAction> findByServiceName(String serviceName);
-}

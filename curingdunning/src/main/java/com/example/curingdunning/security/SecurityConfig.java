@@ -44,7 +44,10 @@ public class SecurityConfig {
                     "/api/admin/login",
                     "/register",
                     "/verify-otp",
-                    "/error"
+                    "/error",
+                    //bring this to admin later
+                    "/api/bills/**",
+                    "/dunning-events/**"
                 ).permitAll()
 
                 // Customer endpoints
@@ -52,13 +55,14 @@ public class SecurityConfig {
                     "/dashboard/**",
                     "/customer/**",
                     "/curing-actions/**",
-                    "/api/bills/**"
+                    
+                    "/api/chat"
                 ).hasRole("CUSTOMER") // must have CUSTOMER role
 
                 // Admin endpoints
                 .requestMatchers(
-                    "/api/admin/**",
-                    "/dunning-events/**"
+                    "/api/admin/**"
+                    
                 ).hasRole("ADMIN") // must have ADMIN role
 
                 // Any other request denied

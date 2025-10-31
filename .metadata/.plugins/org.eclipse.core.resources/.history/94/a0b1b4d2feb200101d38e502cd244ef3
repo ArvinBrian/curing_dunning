@@ -1,0 +1,5 @@
+package com.example.curingdunning.dto;
+
+public class ChatRequest {
+
+}

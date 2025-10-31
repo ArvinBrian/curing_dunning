@@ -1,6 +1,0 @@
-public class CuringActionDTO {
-    private Long id;
-    private String actionName;
-    private String serviceName;
-    private String description;
-}

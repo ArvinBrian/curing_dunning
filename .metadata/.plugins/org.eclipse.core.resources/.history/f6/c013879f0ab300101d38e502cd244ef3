@@ -1,0 +1,29 @@
+package com.example.curingdunning.repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.example.curingdunning.entity.Bill;
+
+public interface BillRepository extends JpaRepository<Bill, Long> {
+    List<Bill> findByCustomerCustomerId(Long customerId);
+    List<Bill> findByStatus(String status);
+    List<Bill> findByCustomerCustomerIdAndStatus(Long customerId, String status);
+    
+    //cannot autobuild queuries with JPA so we write our own queries here
+    @Query("SELECT b FROM Bill b WHERE b.customer.customerId = :customerId AND b.status = 'PENDING'")
+    List<Bill> findCurrentBillsByCustomerId(@Param("customerId") Long customerId);
+
+    @Query("SELECT b FROM Bill b WHERE b.customer.customerId = :customerId AND (b.status = 'OVERDUE' OR b.dueDate > CURRENT_TIMESTAMP)")
+    List<Bill> findUpcomingOrOverdueByCustomerId(@Param("customerId") Long customerId);
+
+    @Query("SELECT COALESCE(SUM(b.amount), 0) FROM Bill b WHERE b.customer.customerId = :customerId AND b.status <> 'PAID'")
+    double getTotalDueForCustomer(@Param("customerId") Long customerId);
+	List<Bill> findByCustomerIdAndStatusNot(Long customerId, String string);
+	@Query("SELECT SUM(b.amount) FROM Bill b WHERE b.customer.id = :customerId AND b.status <> :status")
+	Double sumAmountByCustomerIdAndStatusNot(@Param("customerId") Long customerId, @Param("status") String status);
+
+}

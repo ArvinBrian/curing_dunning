@@ -1,10 +1,8 @@
 package com.example.curingdunning.controller;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,10 +13,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.curingdunning.dto.LoginRequest;
+import com.example.curingdunning.dto.AdminDunningRuleDTO;
 import com.example.curingdunning.entity.DunningRule;
-import com.example.curingdunning.repository.DunningRuleRepository;
 import com.example.curingdunning.service.AdminService;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -27,75 +26,57 @@ public class AdminController {
     @Autowired
     private AdminService adminService;
 
-    @Autowired
-    private DunningRuleRepository ruleRepo;
-
-    // ---------------- Admin login ----------------
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody LoginRequest loginRequest) {
-        try {
-            String token = adminService.login(loginRequest.getEmail(), loginRequest.getPassword());
-            return ResponseEntity.ok(Map.of("token", token));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", e.getMessage()));
-        }
+    // 1. Dunning Rule Management
+    @PostMapping("/rules")
+    public ResponseEntity<DunningRule> createRule(@Valid @RequestBody AdminDunningRuleDTO ruleDTO) {
+        DunningRule rule = adminService.createRule(convertToEntity(ruleDTO));
+        return ResponseEntity.ok(rule);
     }
 
-    // ---------------- CRUD Dunning Rules ----------------
-    @PutMapping("/rules/{ruleId}")
-    public ResponseEntity<String> updateRule(@PathVariable Long ruleId, @RequestBody DunningRule rule) {
-        adminService.updateRule(ruleId, rule);
-        return ResponseEntity.ok("Rule updated successfully");
+    @PutMapping("/rules/{id}")
+    public ResponseEntity<DunningRule> updateRule(@PathVariable Long id, @Valid @RequestBody AdminDunningRuleDTO ruleDTO) {
+        DunningRule rule = adminService.updateRule(id, convertToEntity(ruleDTO));
+        return ResponseEntity.ok(rule);
+    }
+
+    @DeleteMapping("/rules/{id}")
+    public ResponseEntity<Void> deleteRule(@PathVariable Long id) {
+        adminService.deleteRule(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/rules")
     public ResponseEntity<List<DunningRule>> getAllRules() {
-        return ResponseEntity.ok(ruleRepo.findAll());
+        return ResponseEntity.ok(adminService.getAllRules());
     }
 
-    @PostMapping("/rules")
-    public ResponseEntity<DunningRule> createRule(@RequestBody DunningRule rule) {
-        DunningRule created = adminService.createRule(rule);
-        return ResponseEntity.ok(created);
-    }
-
-    @DeleteMapping("/rules/{ruleId}")
-    public ResponseEntity<String> deleteRule(@PathVariable Long ruleId) {
-        adminService.deleteRule(ruleId);
-        return ResponseEntity.ok("Rule deleted successfully");
-    }
-
-    // ---------------- Override subscription ----------------
-    @PutMapping("/override-subscription/{subscriptionId}")
-    public ResponseEntity<String> overrideSubscription(
+    // 2. Subscription Management
+    @PutMapping("/subscriptions/{subscriptionId}")
+    public ResponseEntity<String> updateSubscription(
             @PathVariable Long subscriptionId,
-            @RequestBody Map<String, Object> payload) {
-
-        BigDecimal dueAmount = payload.get("dueAmount") != null
-                ? new BigDecimal(payload.get("dueAmount").toString())
-                : null;
-        String status = (String) payload.get("status");
-
-        adminService.overrideSubscriptionAttributes(subscriptionId, dueAmount, status);
+            @RequestBody Map<String, Object> updates) {
+        adminService.updateSubscription(subscriptionId, updates);
         return ResponseEntity.ok("Subscription updated successfully");
     }
 
-    // ---------------- Override customer subscription ----------------
-    @PutMapping("/override-customer/{customerId}/{serviceName}/{subscriptionId}")
-    public ResponseEntity<String> overrideCustomerService(
+    // 3. Customer Service Status
+    @PutMapping("/customers/{customerId}/services/{serviceName}/status")
+    public ResponseEntity<String> updateServiceStatus(
             @PathVariable Long customerId,
             @PathVariable String serviceName,
-            @PathVariable Long subscriptionId,
-            @RequestBody Map<String, Object> payload) {
-
-        BigDecimal dueAmount = payload.get("dueAmount") != null
-                ? new BigDecimal(payload.get("dueAmount").toString())
-                : null;
-        String status = (String) payload.get("status");
-
-        adminService.overrideCustomerSubscription(customerId, serviceName, subscriptionId, dueAmount, status);
-        return ResponseEntity.ok("Customer subscription updated successfully");
+            @RequestBody Map<String, String> statusUpdate) {
+        adminService.updateServiceStatus(customerId, serviceName, statusUpdate.get("status"));
+        return ResponseEntity.ok("Service status updated");
     }
 
+    private DunningRule convertToEntity(AdminDunningRuleDTO dto) {
+        DunningRule rule = new DunningRule();
+        rule.setServiceName(dto.getServiceName());
+        rule.setOverdueDays(dto.getOverdueDays());
+        rule.setAction(dto.getAction());
+        rule.setPriority(dto.getPriority());
+        rule.setTimeOfDay(dto.getTimeOfDay());
+        rule.setPlanType(dto.getPlanType());
+        return rule;
+    }
 }

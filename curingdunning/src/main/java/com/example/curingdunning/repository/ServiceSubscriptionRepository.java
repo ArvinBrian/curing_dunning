@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import com.example.curingdunning.entity.PlanType;
 import com.example.curingdunning.entity.ServiceSubscription;
 
 public interface ServiceSubscriptionRepository extends JpaRepository<ServiceSubscription, Long> {
@@ -15,4 +16,16 @@ public interface ServiceSubscriptionRepository extends JpaRepository<ServiceSubs
     Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceNameAndId(
             Long customerId, String serviceName, Long subscriptionId
         );
+    List<ServiceSubscription> findByCustomerCustomerIdAndStatus(Long customerId, String status);
+    Optional<ServiceSubscription> findFirstByCustomerCustomerIdAndServiceName(Long customerId, String serviceName);
+
+    Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceNameAndNextPaymentDate(
+        Long customerId, String serviceName, LocalDate nextPaymentDate);
+//    moved to bill repo
+//    boolean existsByCustomerCustomerIdAndServiceNameAndDueDate(Long customerId, String serviceName, LocalDate dueDate);
+
+ // In ServiceSubscriptionRepository.java
+    Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceNameAndPlanTypeAndNextPaymentDate(
+        Long customerId, String serviceName, PlanType planType, LocalDate nextPaymentDate);
+	List<ServiceSubscription> findByStatus(String string);
 }

@@ -1,0 +1,55 @@
+
+/*
+ NOTE: Spring AI package/class names may vary by version. 
+ If these specific classes are not present in your environment, replace with the Ollama HTTP client call
+ (RestTemplate/WebClient) to POST to Ollama's endpoint.
+*/
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ChatResponse;
+import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.repository.CustomerRepository;
+
+@Service
+public class AiResponder {
+
+    private final AiClient aiClient; // or whichever client bean Spring AI exposes
+    private final CustomerRepository customerRepository;
+
+    @Autowired
+    public AiResponder(AiClient aiClient, CustomerRepository customerRepository) {
+        this.aiClient = aiClient;
+        this.customerRepository = customerRepository;
+    }
+
+    public ChatResponse askAi(Long customerId, String userQuery) {
+        // Fetch minimal customer context
+        Customer customer = customerRepository.findById(customerId).orElse(null);
+
+        String systemPrompt = "You are a helpful, concise billing assistant. Answer based on the provided customer data. If you are not sure, ask the user for more info.";
+        String context = buildContext(customer);
+
+        String fullPrompt = systemPrompt + "\n\nCustomer context:\n" + context + "\n\nUser question: " + userQuery;
+
+        // Example using ChatCompletionRequest — adapt to your Spring AI version
+        ChatCompletionRequest request = ChatCompletionRequest.of(
+                ChatMessage.ofSystem(systemPrompt),
+                ChatMessage.ofUser(context + "\n\n" + userQuery)
+        );
+
+        // call the client
+        ChatCompletion completion = aiClient.chat().complete(request);
+
+        String aiText = completion.getChoices().get(0).getMessage().getContent().get(0).getText();
+
+        // Return AI's response; after AI answer, we typically present menu again
+        return new ChatResponse(aiText, false, false);
+    }
+
+    private String buildContext(Customer c) {
+        if (c == null) return "No customer data available.";
+        return String.format("id=%d\nname=%s\nplan=%s\nstatus=%s", c.getId(), c.getName(), c.getPlanName(), c.getStatus());
+    }
+}

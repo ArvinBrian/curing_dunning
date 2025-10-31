@@ -13,10 +13,17 @@ public class Bill {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long billId;
+    
+    private String description;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
+    
+    @ManyToOne
+    @JoinColumn(name = "dunning_event_id", nullable = true)
+    private DunningEvent dunningEvent;
+
 
     @Column(nullable = false)
     private String serviceName;

@@ -1,0 +1,5 @@
+package com.example.curingdunning.service;
+
+public class ChatService {
+
+}

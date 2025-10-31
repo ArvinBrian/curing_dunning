@@ -1,0 +1,21 @@
+package com.example.curingdunning.dto;
+
+public class ChatResponse {
+    private String message;
+    private boolean expectFreeText; // if true, frontend should accept free-text (AI)
+    private boolean endConversation; // if true, show final options (close or live agent)
+
+    public ChatResponse() {}
+    public ChatResponse(String message, boolean expectFreeText, boolean endConversation) {
+        this.message = message;
+        this.expectFreeText = expectFreeText;
+        this.endConversation = endConversation;
+    }
+
+    public String getMessage() { return message; }
+    public void setMessage(String message) { this.message = message; }
+    public boolean isExpectFreeText() { return expectFreeText; }
+    public void setExpectFreeText(boolean expectFreeText) { this.expectFreeText = expectFreeText; }
+    public boolean isEndConversation() { return endConversation; }
+    public void setEndConversation(boolean endConversation) { this.endConversation = endConversation; }
+}

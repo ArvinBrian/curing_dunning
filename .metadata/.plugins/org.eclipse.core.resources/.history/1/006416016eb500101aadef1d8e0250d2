@@ -1,0 +1,174 @@
+package com.example.curingdunning.service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.curingdunning.entity.Admin;
+import com.example.curingdunning.entity.DunningEvent;
+import com.example.curingdunning.entity.DunningRule;
+import com.example.curingdunning.entity.ServiceSubscription;
+import com.example.curingdunning.repository.AdminRepository;
+import com.example.curingdunning.repository.CustomerRepository;
+import com.example.curingdunning.repository.DunningEventRepository;
+import com.example.curingdunning.repository.DunningRuleRepository;
+import com.example.curingdunning.repository.ServiceSubscriptionRepository;
+import com.example.curingdunning.security.JwtUtil;
+
+@Service
+@Transactional
+public class AdminService {
+
+    @Autowired
+    private AdminRepository adminRepo;
+
+    @Autowired private DunningRuleRepository ruleRepo;
+    @Autowired private ServiceSubscriptionRepository subRepo;
+    @Autowired private CustomerRepository customerRepo;
+    @Autowired private DunningEventRepository eventRepo;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    // ---------------- Admin login ----------------
+    public String login(String email, String password) {
+        Admin admin = adminRepo.findByEmail(email);
+        if (admin == null || !admin.getPassword().equals(password)) {
+            throw new RuntimeException("Invalid credentials");
+        }
+        //dont forget to add the role here
+        return jwtUtil.generateToken(admin.getEmail(),"ADMIN");
+    }
+
+    // 1. Rule Management
+    public DunningRule createRule(DunningRule rule) {
+        validateRule(rule);
+        return ruleRepo.save(rule);
+    }
+
+    public DunningRule updateRule(Long id, DunningRule newRule) {
+        DunningRule existing = ruleRepo.findById(id)
+            .orElseThrow(() -> new RuntimeException("Rule not found: " + id));
+        
+        validateRule(newRule);
+        
+        // Update fields
+        existing.setServiceName(newRule.getServiceName());
+        existing.setOverdueDays(newRule.getOverdueDays());
+        existing.setAction(newRule.getAction());
+        existing.setPriority(newRule.getPriority());
+        existing.setTimeOfDay(newRule.getTimeOfDay());
+        existing.setPlanType(newRule.getPlanType());
+        
+        return ruleRepo.save(existing);
+    }
+
+    public void deleteRule(Long id) {
+        // Check if rule is in use
+        if (eventRepo.existsByAppliedRuleId(id)) {
+            throw new RuntimeException("Cannot delete rule that is referenced by events");
+        }
+        ruleRepo.deleteById(id);
+    }
+
+    public List<DunningRule> getAllRules() {
+        return ruleRepo.findAll();
+    }
+
+    // 2. Subscription Management
+    @Transactional
+    public void updateSubscription(Long subscriptionId, Map<String, Object> updates) {
+        ServiceSubscription sub = subRepo.findById(subscriptionId)
+            .orElseThrow(() -> new RuntimeException("Subscription not found"));
+
+        // Update fields based on the map
+        if (updates.containsKey("status")) {
+            String newStatus = (String) updates.get("status");
+            validateStatus(newStatus);
+            sub.setStatus(newStatus);
+        }
+
+        if (updates.containsKey("dueAmount")) {
+            BigDecimal newAmount = new BigDecimal(updates.get("dueAmount").toString());
+            sub.setDueAmount(newAmount);
+        }
+
+        if (updates.containsKey("nextPaymentDate")) {
+            LocalDate newDate = LocalDate.parse(updates.get("nextPaymentDate").toString());
+            sub.setNextPaymentDate(newDate);
+        }
+
+        // Save changes
+        subRepo.save(sub);
+        
+        // Log the change
+        //log.info("Admin updated subscription {}: {}", subscriptionId, updates);
+    }
+
+    // 3. Service Status Management
+    @Transactional
+    public void updateServiceStatus(Long customerId, String serviceName, String newStatus) {
+        List<ServiceSubscription> subs = subRepo.findByCustomerCustomerIdAndServiceName(customerId, serviceName);
+        if (subs.isEmpty()) {
+            throw new RuntimeException("No subscription found");
+        }
+
+        validateStatus(newStatus);
+
+        for (ServiceSubscription sub : subs) {
+            sub.setStatus(newStatus);
+            subRepo.save(sub);
+
+            // If reactivating service, resolve any pending dunning events
+            if ("ACTIVE".equals(newStatus)) {
+                resolvePendingDunningEvents(customerId, serviceName);
+            }
+        }
+    }
+
+    // Helper Methods
+    private void validateRule(DunningRule rule) {
+        if (rule.getServiceName() == null || rule.getServiceName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Service name is required");
+        }
+        if (rule.getOverdueDays() == null || rule.getOverdueDays() < 0) {
+            throw new IllegalArgumentException("Valid overdue days required");
+        }
+        if (rule.getPlanType() == null) {
+            throw new IllegalArgumentException("Plan type is required");
+        }
+        // Add more validations as needed
+    }
+
+    private void validateStatus(String status) {
+        List<String> validStatuses = Arrays.asList("ACTIVE", "BLOCKED", "SUSPENDED", "INACTIVE");
+        if (!validStatuses.contains(status)) {
+            throw new IllegalArgumentException("Invalid status: " + status);
+        }
+    }
+
+    private void resolvePendingDunningEvents(Long customerId, String serviceName) {
+        List<DunningEvent> events = eventRepo.findByCustomerCustomerIdAndServiceNameAndStatus(
+            customerId, serviceName, "PENDING"
+        );
+        
+        for (DunningEvent event : events) {
+            event.setStatus("RESOLVED");
+            event.setResolvedAt(LocalDateTime.now());
+            eventRepo.save(event);
+        }
+    }
+    
+//    @Override // Implementing the method from the AdminService interface
+//    public List<DunningRule> getAllRules() {
+//        // Implementation: Fetch all rules from the repository
+//        return ruleRepository.findAll();
+//    }
+}

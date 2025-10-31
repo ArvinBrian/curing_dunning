@@ -1,0 +1,44 @@
+package com.example.curingdunning.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.ChatRequest;
+import com.example.curingdunning.dto.ChatResponse;
+import com.example.curingdunning.service.ChatService;
+
+@RestController
+@RequestMapping("/api/chat")
+public class ChatController {
+
+    private final ChatService chatService;
+
+    public ChatController(ChatService chatService) { this.chatService = chatService; }
+
+    @PostMapping
+    public ResponseEntity<ChatResponse> chat(@RequestBody ChatRequest request) {
+        if (request.getCustomerId() == null) {
+            return ResponseEntity.badRequest().body(new ChatResponse("customerId is required", false, true));
+        }
+        ChatResponse response = chatService.handle(request.getCustomerId(), request.getInput());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Optionally expose the menu so frontend can fetch it.
+     */
+    @GetMapping("/menu")
+    public ResponseEntity<String> menu() {
+        String menu = "Hi! What do you need today?\n" +
+                "1) Current bills\n" +
+                "2) Current plan\n" +
+                "3) Total due\n" +
+                "4) Upcoming/Overdue payments\n" +
+                "5) Chat with us (free-text)";
+        return ResponseEntity.ok(menu);
+    }
+}

@@ -52,10 +52,14 @@ public class CuringActionService {
             saved.setResolvedAt(LocalDateTime.now());
             actionRepo.save(saved);
 
+         // FIX: Pass the original Dunning Rule ID from the DunningEvent
+            Long originalRuleId = event.getAppliedRule().getId(); // <-- CORRECT ID
+            
             // resolve the event and reset negative status
-            eventService.markResolved(event.getId(), saved.getActionId());
+            eventService.markResolved(event.getId(), originalRuleId); // <-- FIXED CALL} else {
+            
         } else {
-            saved.setStatus(ActionStatus.FAILED);
+        	saved.setStatus(ActionStatus.FAILED);
             actionRepo.save(saved);
         }
 

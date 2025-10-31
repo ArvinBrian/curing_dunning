@@ -1,0 +1,45 @@
+package com.example.curingdunning.service;
+
+import org.springframework.stereotype.Service;
+
+import com.example.curingdunning.dto.ChatResponse;
+
+@Service
+public class ChatService {
+
+    private final RuleBasedResponder ruleBasedResponder;
+    private final AiResponder aiResponder;
+
+    public ChatService(RuleBasedResponder ruleBasedResponder, AiResponder aiResponder) {
+        this.ruleBasedResponder = ruleBasedResponder;
+        this.aiResponder = aiResponder;
+    }
+
+    /**
+     * input can be:
+     * - a number "1","2","3","4" -> rule based
+     * - the number "5" -> instruct frontend to prompt free text
+     * - free text -> ai responder
+     */
+    public ChatResponse handle(Long customerId, String input) {
+        if (input == null || input.isBlank()) {
+            return new ChatResponse("Please enter a valid option or question.", false, false);
+        }
+
+        String trimmed = input.trim();
+
+        // If input is a single digit 1-4 -> rule based
+        if (trimmed.matches("[1-4]")) {
+            int option = Integer.parseInt(trimmed);
+            return ruleBasedResponder.handleOption(customerId, option);
+        }
+
+        // If input is exactly 5 -> signal frontend to ask for free text
+        if (trimmed.equals("5")) {
+            return new ChatResponse("You selected Chat with Us. Please type your question below.", true, false);
+        }
+
+        // Otherwise treat as free text -> AI responder
+        return aiResponder.askAi(customerId, trimmed);
+    }
+}

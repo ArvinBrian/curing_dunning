@@ -39,6 +39,29 @@ public class ServiceSubscription {
  @ManyToOne
  @JoinColumn(name = "customer_id")
  private Customer customer;
+ 
+ private LocalDate lastPaymentDate;
+ 
+ @Column(nullable=false)
+ private int billingCycleDays = 30;
+ 
+ @Column(nullable=false)
+ private int call_usage_minutes;
+ 
+ @Column(nullable=false)
+ private int data_usage_gb;
+ 
+ @Column(nullable=false)
+ private int sms_count;
+ 
+ 
+ private LocalDate nextPaymentDate;
+ 
+ public void updateNextPaymentDate() {
+     if (lastPaymentDate != null) {
+         this.nextPaymentDate = lastPaymentDate.plusDays(billingCycleDays);
+     }
+ }
 
  // other fields, getters/setters
 }
