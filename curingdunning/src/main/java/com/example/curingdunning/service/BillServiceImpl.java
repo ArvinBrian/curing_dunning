@@ -288,7 +288,7 @@ public class BillServiceImpl implements BillService {
 		if (!customerRepo.existsById(customerId)) {
 			throw new CustomerNotFoundException("Customer not found: " + customerId);
 		}
-		List<Bill> bills = billRepo.findByCustomerCustomerIdAndStatus(customerId, "PENDING");
+		List<Bill> bills = billRepo.findPayableBillsForCustomer(customerId);
 		return bills.stream().map(this::toDTO).collect(Collectors.toList());
 	}
 
@@ -312,7 +312,13 @@ public class BillServiceImpl implements BillService {
 		dto.setDueDate(bill.getDueDate());
 		dto.setPaidAt(bill.getPaymentDate());
 		dto.setDaysOverdue(bill.getOverdueDays());
+		dto.setPaymentDate(bill.getPaymentDate());
 //        dto.setPlanType(subRepo.getPlanType().name());
+		if (bill.getDunningEvent() != null) {
+	        dto.setDunningEventId(bill.getDunningEvent().getId());
+	    } else {
+	        dto.setDunningEventId(null);
+	    }
 		return dto;
 	}
 
@@ -430,4 +436,37 @@ public class BillServiceImpl implements BillService {
 	    
 	    return totalAmount.max(sub.getDueAmount() != null ? sub.getDueAmount() : BigDecimal.ZERO);
 	}
+	
+	//methods for mock bill payment:
+	@Override
+    public Long getDunningEventIdForBill(Long billId) {
+        Bill bill = billRepo.findById(billId)
+                .orElseThrow(() -> new RuntimeException("Bill not found with ID: " + billId));
+
+        if (bill.getDunningEvent() == null) {
+            throw new RuntimeException("Bill ID " + billId + " is not linked to a Dunning Event.");
+        }
+        return bill.getDunningEvent().getId();
+    }
+
+    @Transactional
+    @Override
+    public void markBillAsPaid(Long billId) {
+        Bill bill = billRepo.findById(billId)
+                .orElseThrow(() -> new RuntimeException("Bill not found with ID: " + billId));
+        
+        if (bill.getPaid()) {
+            // Optional: log or throw exception if already paid
+            return; 
+        }
+
+        bill.setPaid(true);
+        bill.setStatus("PAID"); // Assuming you use a status field
+        bill.setPaymentDate(LocalDateTime.now());
+        billRepo.save(bill);
+
+        // NOTE: In your previous code, the actual curing logic (markResolved, etc.) 
+        // was initiated in the service that called markBillAsPaid.
+        // That caller is now the PaymentService.
+    }
 }

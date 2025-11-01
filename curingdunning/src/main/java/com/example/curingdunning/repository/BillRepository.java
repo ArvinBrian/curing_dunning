@@ -46,6 +46,8 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
 	boolean existsByCustomerAndServiceNameAndDueDate(Customer customer, String serviceName, LocalDateTime dueDate);
 
 //	Optional<ServiceSubscription> findFirstByCustomerCustomerIdAndServiceName(Long customerId, String serviceName);
-
+	
+	@Query("SELECT b FROM Bill b WHERE b.customer.customerId = :customerId AND b.status <> 'PAID' AND b.dunningEvent IS NOT NULL")
+	List<Bill> findPayableBillsForCustomer(@Param("customerId") Long customerId);
 
 }

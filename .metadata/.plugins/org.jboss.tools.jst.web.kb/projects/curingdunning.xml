@@ -161,10 +161,11 @@
   <path value="C:/Users/arvinbrian.j/.m2/repository/org/springframework/spring-aop/6.2.11/spring-aop-6.2.11.jar"/>
  </paths>
  <validation>
+  <core validator-id="jboss.cdi.core"/>
   <el>
-   <linked-el length="23" name="%0" offset="5719" path="%1"/>
-   <linked-el length="23" name="%2" offset="5719" path="%1"/>
-   <linked-el length="23" name="%3" offset="5719" path="%1"/>
+   <linked-el length="23" name="%0" offset="5779" path="%1"/>
+   <linked-el length="23" name="%2" offset="5779" path="%1"/>
+   <linked-el length="23" name="%3" offset="5779" path="%1"/>
   </el>
  </validation>
  <aliases>

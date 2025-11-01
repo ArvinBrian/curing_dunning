@@ -30,4 +30,8 @@ public class BillDTO {
 
     @Min(value = 0, message = "Days overdue cannot be negative")
     private Integer daysOverdue;
+    
+    private Long dunningEventId;
+    
+    private LocalDateTime paymentDate;
 }

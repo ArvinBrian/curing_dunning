@@ -42,13 +42,27 @@ public class JwtFilter extends OncePerRequestFilter {
 
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             if (jwtUtil.validateToken(jwt)) {
-                String role = jwtUtil.extractRole(jwt); // get role from JWT
-                List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+                String role = jwtUtil.extractRole(jwt); // e.g., extracts "customer" or "CUSTOMER"
+                
+                // 🚨 FIX: Check if the role is null/empty and ensure it is upper-cased for consistency
+                if (role != null && !role.isEmpty()) {
+                    
+                    // Convert to a Spring Security authority format: ROLE_ROLE_NAME
+                    // Spring Security requires authorities to be prefixed with ROLE_
+                    String authorityString = "ROLE_" + role.toUpperCase(); 
 
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(email, null, authorities);
+                    // Create the list of authorities
+                    List<SimpleGrantedAuthority> authorities = 
+                        List.of(new SimpleGrantedAuthority(authorityString));
+                    
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(email, null, authorities);
 
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else {
+                    // Optional: Log an error if the token is valid but the role is missing/empty
+                    System.err.println("JWT Token valid but role claim is empty or missing.");
+                }
             }
         }
 

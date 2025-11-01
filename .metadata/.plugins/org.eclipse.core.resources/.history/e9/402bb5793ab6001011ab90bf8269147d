@@ -1,0 +1,36 @@
+// MockPaymentGatewayImpl.java (in your Service package)
+
+import java.math.BigDecimal;
+
+@Service
+public class MockPaymentGatewayImpl implements MockPaymentGateway {
+
+    // Simulates Razorpay Order ID generation
+    private static final String ORDER_PREFIX = "order_MOCK_";
+    
+    // Simulates a successful, valid signature for testing
+    private static final String VALID_SIGNATURE = "mock_valid_signature_12345";
+
+    @Override
+    public String createOrder(BigDecimal amount, String currency) {
+        // Generates a unique, mock Order ID
+        return ORDER_PREFIX + System.currentTimeMillis();
+    }
+
+    @Override
+    public boolean verifySignature(String orderId, String paymentId, String signature, String secret) {
+        // --- This simulates the critical security check ---
+        
+        // In a real system, a hash is calculated and compared to the signature.
+        // For our mock, we just check if the signature matches our known "valid" mock signature.
+        
+        // This ensures the frontend must send the correct "key" to succeed verification.
+        return VALID_SIGNATURE.equals(signature);
+    }
+
+	@Override
+	public String createOrder(BigDecimal amount, String currency) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+}

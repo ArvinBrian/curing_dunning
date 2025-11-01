@@ -46,7 +46,7 @@ public class SecurityConfig {
                     "/verify-otp",
                     "/error",
                     //bring this to admin later
-                    "/api/bills/**",
+//                    "/api/bills/**",
                     "/dunning-events/**"
                 ).permitAll()
 
@@ -55,8 +55,9 @@ public class SecurityConfig {
                     "/dashboard/**",
                     "/customer/**",
                     "/curing-actions/**",
-                    
-                    "/api/chat"
+                    "/api/bills/**",
+                    "/api/chat",
+                    "/api/payment/**"
                 ).hasRole("CUSTOMER") // must have CUSTOMER role
 
                 // Admin endpoints

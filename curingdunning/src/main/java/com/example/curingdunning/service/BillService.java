@@ -25,4 +25,17 @@ public interface BillService {
 	public void generateUpcomingPostpaidBill(Customer customer, ServiceSubscription subscription, LocalDate dueDate);
     boolean billExists(Customer customer, ServiceSubscription sub, LocalDate dueDate);
     void generateUpcomingPrepaidBill(Customer customer, ServiceSubscription sub, LocalDate dueDate);
+
+    //methods for mock bill payment:
+    /**
+     * Retrieves the associated Dunning Event ID for a given Bill.
+     * Required for linking payment to curing action.
+     */
+    Long getDunningEventIdForBill(Long billId);
+
+    /**
+     * Marks a bill as paid, accepting a Long billId as argument.
+     * This replaces your existing markBillAsPaid method signature if it existed.
+     */
+    void markBillAsPaid(Long billId);
 }

@@ -1,0 +1,87 @@
+package com.example.curingdunning.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.curingdunning.dto.OrderResponse;
+import com.example.curingdunning.dto.PaymentRequest;
+import com.example.curingdunning.dto.PaymentVerificationRequest;
+import com.example.curingdunning.service.PaymentService;
+
+// PaymentController.java (in your Controller package)
+
+@RestController
+@RequestMapping("/api/payment")
+public class PaymentController {
+
+////    @Value("${razorpay.key.id}")
+//    private String razorpayKeyId;
+//
+////    @Value("${razorpay.key.secret}")
+//    private String razorpayKeySecret;
+
+    @Autowired
+    private PaymentService paymentService; // A new service we will define next
+
+    
+ // Define the mock constants
+    private static final String MOCK_KEY_ID = "rzp_test_MOCKID12345";
+    private static final String MOCK_KEY_SECRET = "MOCK_SECRET_KEY_FOR_VERIFICATION";
+    
+    /**
+     * Step 1: Endpoint to create a Razorpay Order and get the Order ID.
+     * This is called by the frontend when the user clicks 'Pay'.
+     */
+    @PostMapping("/create-order")
+    public ResponseEntity<OrderResponse> createOrder(@RequestBody PaymentRequest request) {
+        // Validation: Ensure billId and amount are valid
+
+        try {
+            // Logic to call Razorpay API and create the order is in the service
+            OrderResponse response = paymentService.createRazorpayOrder(
+                request.getBillId(),
+                request.getAmount(),
+                request.getCurrency(),
+//                razorpayKeyId,
+//                razorpayKeySecret
+                MOCK_KEY_ID,
+                MOCK_KEY_SECRET
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // Handle Razorpay API errors (e.g., amount too low, invalid currency)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body(null); // Simple error response for now
+        }
+    }
+
+    /**
+     * Step 2: Endpoint to verify the payment signature and trigger Dunning Curing.
+     * This is called by the frontend upon successful completion of the payment popup.
+     */
+    @PostMapping("/verify-success")
+    public ResponseEntity<String> verifyPayment(@RequestBody PaymentVerificationRequest request) {
+        try {
+            // Logic to verify the signature and cure the dunning event
+            paymentService.verifyAndCureDunning(
+                request.getBillId(),
+                request.getRazorpayOrderId(),
+                request.getRazorpayPaymentId(),
+                request.getRazorpaySignature(),
+//                razorpayKeySecret
+                MOCK_KEY_SECRET
+            );
+            return ResponseEntity.ok("Payment successful and bill cured.");
+        } catch (Exception e) {
+            // Handle verification failure or curing failure
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                 .body("Payment verification or curing failed: " + e.getMessage());
+        }
+    }
+}
