@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,10 +38,6 @@ public class AdminService {
 
     @Autowired
     private JwtUtil jwtUtil;
-    
-    @Autowired
-    private PasswordEncoder passwordEncoder; // Inject the password encoder
-
 
     // ---------------- Admin login ----------------
 
@@ -199,27 +194,5 @@ public class AdminService {
         stats.put("totalRules", ruleRepo.count());
         stats.put("totalSubscriptions", subRepo.count());
         return stats;
-    }
-    
-    public Customer createCustomer(Customer customerData) {
-        // Check if email already exists
-        if (customerRepo.findByEmail(customerData.getEmail()).isPresent()) {
-            throw new IllegalArgumentException("Customer with email " + customerData.getEmail() + " already exists.");
-        }
-
-        Customer newCustomer = new Customer();
-        newCustomer.setName(customerData.getName());
-        newCustomer.setEmail(customerData.getEmail());
-        newCustomer.setPhone(customerData.getPhone());
-        
-        // Hash the password before saving
-        newCustomer.setPassword(passwordEncoder.encode(customerData.getPassword()));
-        
-        newCustomer.setStatus(Customer.Status.ACTIVE); // Default to ACTIVE
-        newCustomer.setRole("CUSTOMER");
-        newCustomer.setCreatedAt(LocalDateTime.now());
-        newCustomer.setUpdatedAt(LocalDateTime.now());
-
-        return customerRepo.save(newCustomer);
     }
 }

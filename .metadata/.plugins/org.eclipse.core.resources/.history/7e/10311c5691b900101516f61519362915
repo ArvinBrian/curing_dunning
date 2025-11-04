@@ -1,10 +1,10 @@
 package com.example.curingdunning.controller;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -131,12 +131,6 @@ public class AdminController {
 		List<Customer> customers = adminService.getCustomersByFilters(customerId, phoneNumber);
 		return ResponseEntity.ok(customers);
 	}
-	
-	@PostMapping("/customers")
-    public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
-        Customer newCustomer = adminService.createCustomer(customer);
-        return new ResponseEntity<>(newCustomer, HttpStatus.CREATED);
-    }
 
 	private DunningRule convertToEntity(AdminDunningRuleDTO dto) {
 		DunningRule rule = new DunningRule();
