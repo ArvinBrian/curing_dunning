@@ -18,10 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.curingdunning.dto.AdminDunningRuleDTO;
 import com.example.curingdunning.dto.AdminLoginRequest;
-import com.example.curingdunning.dto.AllEventsViewDTO;
 import com.example.curingdunning.dto.LoginResponse;
 import com.example.curingdunning.entity.Admin;
 import com.example.curingdunning.entity.Customer;
+import com.example.curingdunning.entity.DunningEvent;
 import com.example.curingdunning.entity.DunningRule;
 import com.example.curingdunning.repository.CustomerRepository;
 import com.example.curingdunning.repository.DunningRuleRepository;
@@ -59,11 +59,10 @@ public class AdminController {
 	// In AdminController.java
 
 	@GetMapping("/events")
-	public ResponseEntity<List<AllEventsViewDTO>> getAllDunningEvents(
+	public ResponseEntity<List<DunningEvent>> getAllDunningEvents(
 	        @RequestParam(required = false) String status,
-	        @RequestParam(required = false) String planType,
-	        @RequestParam(required = false) String serviceName) {
-	    List<AllEventsViewDTO> events = adminService.getAllDunningEvents(status, planType, serviceName);
+	        @RequestParam(required = false) String planType) {
+	    List<DunningEvent> events = adminService.getAllDunningEvents(status, planType);
 	    return ResponseEntity.ok(events);
 	}
 

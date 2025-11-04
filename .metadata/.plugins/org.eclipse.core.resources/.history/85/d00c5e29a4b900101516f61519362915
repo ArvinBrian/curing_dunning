@@ -7,14 +7,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.curingdunning.dto.AllEventsViewDTO;
 import com.example.curingdunning.entity.Admin;
 import com.example.curingdunning.entity.Customer;
 import com.example.curingdunning.entity.DunningEvent;
@@ -54,61 +52,6 @@ public class AdminService {
             return admin;
         }
         return null; // Invalid credentials
-    }
-    
-    public List<DunningEvent> getAllDunningEvents(String status, String planType) {
-        // In a real-world scenario with lots of data, you would use Specifications
-        // or dynamic queries. For now, we can filter in-memory.
-        List<DunningEvent> allEvents = eventRepo.findAll();
-
-        if (status != null && !status.trim().isEmpty()) {
-            allEvents.removeIf(event -> !event.getStatus().equalsIgnoreCase(status));
-        }
-
-        if (planType != null && !planType.trim().isEmpty() && !planType.equalsIgnoreCase("ALL")) {
-            // This assumes DunningEvent has access to the rule's planType.
-            // You may need to adjust this based on your entity relationships.
-            allEvents.removeIf(event -> event.getAppliedRule() == null || !event.getAppliedRule().getPlanType().name().equalsIgnoreCase(planType));
-        }
-
-        return allEvents;
-    }
-    
-    public List<AllEventsViewDTO> getAllDunningEvents(String status, String planType, String serviceName) {
-        List<DunningEvent> allEvents = eventRepo.findAll();
-
-        // Filter the events based on the provided criteria
-        List<DunningEvent> filteredEvents = allEvents.stream()
-            .filter(event -> status == null || status.trim().isEmpty() || event.getStatus().equalsIgnoreCase(status))
-            .filter(event -> serviceName == null || serviceName.trim().isEmpty() || event.getServiceName().equalsIgnoreCase(serviceName))
-            .filter(event -> {
-                if (planType == null || planType.trim().isEmpty() || planType.equalsIgnoreCase("ALL")) {
-                    return true; // No planType filter, so include the event
-                }
-                // Check if the event has a rule and if the planType matches
-                return event.getAppliedRule() != null && event.getAppliedRule().getPlanType().name().equalsIgnoreCase(planType);
-            })
-            .collect(Collectors.toList());
-
-        // Map the filtered entities to our new AllEventsViewDTO
-        return filteredEvents.stream().map(event -> {
-            AllEventsViewDTO dto = new AllEventsViewDTO();
-            dto.setId(event.getId());
-            dto.setServiceName(event.getServiceName());
-            dto.setStatus(event.getStatus());
-            dto.setCreatedAt(event.getCreatedAt());
-
-            // Safely get data from related entities
-            if (event.getCustomer() != null) {
-                dto.setCustomerId(event.getCustomer().getCustomerId());
-                dto.setCustomerName(event.getCustomer().getName());
-            }
-            if (event.getAppliedRule() != null) {
-                dto.setPlanType(event.getAppliedRule().getPlanType().name());
-            }
-
-            return dto;
-        }).collect(Collectors.toList());
     }
 
     // 1. Rule Management
