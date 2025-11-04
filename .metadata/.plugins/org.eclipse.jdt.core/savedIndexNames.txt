@@ -33,7 +33,6 @@ INDEX VERSION 1.134+C:\Users\arvinbrian.j\Desktop\CuringDuning\.metadata\.plugin
 2633454354.index
 1527539138.index
 1376829080.index
-2699406330.index
 2676267973.index
 1513208714.index
 481614922.index
@@ -42,8 +41,8 @@ INDEX VERSION 1.134+C:\Users\arvinbrian.j\Desktop\CuringDuning\.metadata\.plugin
 3742662053.index
 2546968442.index
 1998220177.index
-3784137505.index
 1380403154.index
+3784137505.index
 3421432416.index
 3278895095.index
 928132585.index
@@ -60,10 +59,10 @@ INDEX VERSION 1.134+C:\Users\arvinbrian.j\Desktop\CuringDuning\.metadata\.plugin
 2325530600.index
 3956073898.index
 2886948561.index
-1865797976.index
 3413725848.index
 169989304.index
 1583237721.index
+1865797976.index
 3719986964.index
 717626563.index
 95103231.index

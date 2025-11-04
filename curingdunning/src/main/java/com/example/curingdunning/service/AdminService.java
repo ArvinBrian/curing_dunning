@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.curingdunning.entity.Admin;
+import com.example.curingdunning.entity.Customer;
 import com.example.curingdunning.entity.DunningEvent;
 import com.example.curingdunning.entity.DunningRule;
 import com.example.curingdunning.entity.ServiceSubscription;
@@ -38,13 +40,13 @@ public class AdminService {
     private JwtUtil jwtUtil;
 
     // ---------------- Admin login ----------------
-    public String login(String email, String password) {
+
+    public Admin login(String email, String password) {
         Admin admin = adminRepo.findByEmail(email);
-        if (admin == null || !admin.getPassword().equals(password)) {
-            throw new RuntimeException("Invalid credentials");
+        if (admin != null && admin.getPassword().equals(password)) {
+            return admin;
         }
-        //dont forget to add the role here
-        return jwtUtil.generateToken(admin.getEmail(),"ADMIN");
+        return null; // Invalid credentials
     }
 
     // 1. Rule Management
@@ -164,5 +166,33 @@ public class AdminService {
             event.setResolvedAt(LocalDateTime.now());
             eventRepo.save(event);
         }
+    }
+    
+ // **NEW METHOD TO GET ALL CUSTOMERS (Fallback)**
+    public List<Customer> getAllCustomers() {
+        return customerRepo.findAll();
+    }
+    
+    public List<Customer> getCustomersByFilters(Long customerId, String phoneNumber) {
+        // Check if ANY filter criteria is provided
+        boolean hasCustomerId = (customerId != null);
+        boolean hasPhoneNumber = (phoneNumber != null && !phoneNumber.trim().isEmpty());
+
+        if (!hasCustomerId && !hasPhoneNumber) {
+            // **FIX 1: When no filter is specified, return ALL customers.**
+            return customerRepo.findAll(); 
+        }
+
+        // If filters ARE provided, use the filtering logic (as previously defined)
+        String phoneFilter = hasPhoneNumber ? phoneNumber.trim() : null;
+        return customerRepo.findByFilters(customerId, phoneFilter);
+    }
+    
+    public Map<String, Long> getDashboardStats() {
+        Map<String, Long> stats = new HashMap<>();
+        stats.put("totalCustomers", customerRepo.count());
+        stats.put("totalRules", ruleRepo.count());
+        stats.put("totalSubscriptions", subRepo.count());
+        return stats;
     }
 }
