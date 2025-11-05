@@ -9,5 +9,8 @@ import com.example.curingdunning.entity.PlanType;
 public interface DunningRuleRepository extends JpaRepository<DunningRule, Long> {
     List<DunningRule> findByServiceName(String serviceName);
     List<DunningRule> findByServiceNameAndPlanType(String serviceName, PlanType planType);
+    List<DunningRule> findByOverdueDaysAndServiceNameAndPlanType(int overdueDays, String serviceName, String planType);
+    List<DunningRule> findByOverdueDaysAndServiceNameAndPlanType(int daysOverdue, String serviceName, PlanType prepaid);
+
 
 }

@@ -79,7 +79,7 @@ public class CuringActionService {
                 action.getActionId(),
                 action.getDunningEvent().getId(),
                 action.getCustomer().getCustomerId(),
-                action.getDunningEvent().getServiceName(),
+                action.getDunningEvent().getSubscription().getServiceName(),
                 action.getActionType(),
                 action.getStatus(),
                 action.getCreatedAt(),
@@ -94,4 +94,3 @@ public class CuringActionService {
                 .collect(Collectors.toList());
     }
 }
-

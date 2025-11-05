@@ -8,13 +8,14 @@ import com.example.curingdunning.dto.DunningEventDTO;
 import com.example.curingdunning.entity.DunningEvent;
 import com.example.curingdunning.entity.DunningRule;
 import com.example.curingdunning.entity.PlanType;
+import com.example.curingdunning.entity.ServiceSubscription;
 
 public interface DunningEventRepository extends JpaRepository<DunningEvent, Long> {
     boolean existsByAppliedRuleId(Long ruleId);
-    List<DunningEvent> findByCustomerCustomerIdAndServiceNameAndStatus(Long customerId, String serviceName, String status);
+    List<DunningEvent> findByCustomer_CustomerIdAndSubscription_ServiceNameAndStatus(Long customerId, String serviceName, String status);
     
  // Required by processScheduledBillingAndOverdues (Section 1)
-    boolean existsByCustomerCustomerIdAndServiceNameAndStatus(
+    boolean existsByCustomer_CustomerIdAndSubscription_ServiceNameAndStatus(
         Long customerId, 
         String serviceName, 
         String status
@@ -27,6 +28,9 @@ public interface DunningEventRepository extends JpaRepository<DunningEvent, Long
 //	Collection<DunningEventDTO> findByCustomerCustomerIdOrderByCreatedAtDesc(Long customerId);
 //	Collection<DunningEventDTO> findByServiceNameAndPlanType(String serviceName, PlanType prepaid);
 //    List<DunningRule> findByServiceNameAndPlanType(String serviceName, PlanType planType);
-	
+	List<DunningEvent> findBySubscription_Customer_CustomerId(Long customerId);
+boolean existsBySubscriptionAndAppliedRule(ServiceSubscription subscription, DunningRule rule);
+List<DunningEvent> findByCustomerCustomerId(Long customerId);
+
 	
 }

@@ -9,11 +9,11 @@ import com.example.curingdunning.entity.CuringAction;
 @Repository
 public interface CuringActionRepository extends JpaRepository<CuringAction, Long> {
 
-    // Correct method: access serviceName via the dunningEvent relationship
-    List<CuringAction> findByDunningEventServiceName(String serviceName);
+    // Corrected method: access serviceName via the dunningEvent's subscription relationship
+    List<CuringAction> findByDunningEvent_Subscription_ServiceName(String serviceName);
 
     // Filter by customer and service if needed
-    List<CuringAction> findByCustomerCustomerIdAndDunningEventServiceName(Long customerId, String serviceName);
+    List<CuringAction> findByCustomer_CustomerIdAndDunningEvent_Subscription_ServiceName(Long customerId, String serviceName);
 
     // Example: get all actions for a customer
     List<CuringAction> findByCustomerCustomerId(Long customerId);

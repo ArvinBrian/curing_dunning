@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import com.example.curingdunning.entity.PlanType;
 import com.example.curingdunning.entity.ServiceSubscription;
@@ -28,4 +29,10 @@ public interface ServiceSubscriptionRepository extends JpaRepository<ServiceSubs
     Optional<ServiceSubscription> findByCustomerCustomerIdAndServiceNameAndPlanTypeAndNextPaymentDate(
         Long customerId, String serviceName, PlanType planType, LocalDate nextPaymentDate);
 	List<ServiceSubscription> findByStatus(String string);
+    List<ServiceSubscription> findByCustomerCustomerIdAndId(Long customerId, Long id);
+    
+    @Query("SELECT s FROM ServiceSubscription s JOIN FETCH s.customer")
+    List<ServiceSubscription> findAllWithCustomer();
+
+
 }

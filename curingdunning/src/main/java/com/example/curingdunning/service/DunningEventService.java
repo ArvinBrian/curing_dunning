@@ -24,6 +24,7 @@ import com.example.curingdunning.repository.DunningEventRepository;
 import com.example.curingdunning.repository.DunningRuleRepository;
 import com.example.curingdunning.repository.ServiceSubscriptionRepository;
 
+import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 
 @Service
@@ -55,7 +56,7 @@ public class DunningEventService {
     private DunningEventDTO toDto(DunningEvent event) {
         DunningEventDTO dto = new DunningEventDTO();
         dto.setEventId(event.getId());
-        dto.setServiceName(event.getServiceName());
+        dto.setServiceName(event.getSubscription() != null ? event.getSubscription().getServiceName() : "N/A");
         dto.setDaysOverdue(event.getDaysOverdue());
         dto.setStatus(event.getStatus());
         dto.setCreatedAt(event.getCreatedAt());
@@ -64,7 +65,7 @@ public class DunningEventService {
 
     
     public List<DunningEventDTO> getEventsForCustomer(Long customerId) {
-        // Fetch all events for the given customer, ordered by creation date
+        // Fetch all events for the given customer, ordered by creation date (This now uses the direct customer link)
         return eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
                 .map(this::toDto) // Convert each event to a DTO
@@ -77,7 +78,7 @@ public class DunningEventService {
         LocalDate today = LocalDate.now();
         List<ServiceSubscription> subscriptions;
         try {
-            subscriptions = subRepo.findAll();
+            subscriptions = subRepo.findAllWithCustomer();
         } catch (Throwable t) {
             log.error("Fatal error fetching subscriptions", t);
             return;
@@ -139,59 +140,44 @@ public class DunningEventService {
             return;
         }
 
-        // Fixed: Get all applicable rules and sort by overdueDays ASC (less severe first)
-        List<DunningRule> rules = ruleRepo.findByServiceNameAndPlanType(sub.getServiceName(), PlanType.PREPAID)
-                .stream()
-                .filter(r -> r.getOverdueDays() != null && daysOverdue >= r.getOverdueDays())
-                .sorted(Comparator.comparing(DunningRule::getOverdueDays))
-                .collect(Collectors.toList());
+        // Find rules that match the exact number of overdue days for the subscription's service and plan type.
+        List<DunningRule> rules = ruleRepo.findByOverdueDaysAndServiceNameAndPlanType(
+                (int) daysOverdue,
+                sub.getServiceName(),
+                PlanType.PREPAID
+        );
 
         if (rules.isEmpty()) {
-            log.info("No applicable rules found for customer={} subscription={} (days overdue: {})",
+            log.info("No applicable rule found for customer={} subscription={} on exact overdue day {}",
                      customer.getCustomerId(), sub.getServiceName(), daysOverdue);
             return;
         }
 
-        // Get the most appropriate rule (highest overdueDays that's still <= actual overdue days)
-        DunningRule chosen = rules.get(rules.size() - 1);
-        log.info("Selected rule {} for subscription {} (days overdue: {})", 
-            chosen.getId(), sub.getServiceName(), daysOverdue);
+        // Process each rule that matches today's overdue count
+        for (DunningRule rule : rules) {
+            log.info("Found matching rule {} for subscription {} (days overdue: {})",
+                rule.getId(), sub.getServiceName(), daysOverdue);
 
-        // Check for existing unresolved event with same action
-        boolean exists = eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customer.getCustomerId())
-                .stream()
-                .anyMatch(e -> e.getServiceName().equals(sub.getServiceName())
-                        && !"RESOLVED".equals(e.getStatus())
-                        && e.getAppliedRule() != null
-                        && e.getAppliedRule().getAction().equals(chosen.getAction()));
+            // Check if an event for this specific subscription and rule combination already exists.
+            boolean eventExists = eventRepo.existsBySubscriptionAndAppliedRule(sub, rule);
 
-        if (exists) {
-            log.info("Event already exists for customer={} subscription={} action={}", 
-                customer.getCustomerId(), sub.getServiceName(), chosen.getAction());
-            return;
+            if (eventExists) {
+                log.info("Event for rule {} and subscription {} already exists. Skipping.",
+                    rule.getId(),
+                    sub.getId());
+                continue; // Skip to the next rule
+            }
+
+            // Create new event
+            DunningEvent ev = createDunningEvent(customer, sub, rule, daysOverdue, nextDueDate);
+            eventRepo.save(ev);
+
+            // Apply immediate actions if needed
+            applyImmediateAction(sub, rule.getAction());
+
+            log.info("Created dunning event: customer={} subscription={} rule={} action={}",
+                customer.getCustomerId(), sub.getId(), rule.getId(), rule.getAction());
         }
-
-        // Create new event
-        DunningEvent ev = new DunningEvent();
-        ev.setCustomer(customer);
-        ev.setServiceName(sub.getServiceName());
-        ev.setDaysOverdue((int) daysOverdue);
-        ev.setOriginalDueDate(nextDueDate.atStartOfDay());
-        ev.setStatus("PENDING");
-        ev.setTriggeredBy("SYSTEM");
-        ev.setCreatedAt(LocalDateTime.now());
-        ev.setAppliedRule(chosen);
-        eventRepo.save(ev);
-
-        // Apply immediate actions if needed
-        if ("THROTTLE_DATA".equals(chosen.getAction()) || 
-            "BAR_OUTGOING_CALLS".equals(chosen.getAction())) {
-            sub.setStatus("BLOCKED");
-            subRepo.save(sub);
-        }
-
-        log.info("Created dunning event: customer={} subscription={} rule={} action={}", 
-            customer.getCustomerId(), sub.getServiceName(), chosen.getId(), chosen.getAction());
     }
 
     @Transactional
@@ -223,53 +209,72 @@ public class DunningEventService {
             return;
         }
 
-        // Get applicable rules sorted by severity (overdueDays ASC)
-        List<DunningRule> rules = ruleRepo.findByServiceNameAndPlanType(sub.getServiceName(), PlanType.POSTPAID)
-                .stream()
-                .filter(r -> r.getOverdueDays() != null && daysOverdue >= r.getOverdueDays())
-                .sorted(Comparator.comparingInt(DunningRule::getOverdueDays))
-                .collect(Collectors.toList());
+        // Find rules that match the exact number of overdue days for the subscription's service and plan type.
+        List<DunningRule> rules = ruleRepo.findByOverdueDaysAndServiceNameAndPlanType(
+                (int) daysOverdue,
+                sub.getServiceName(),
+                PlanType.POSTPAID
+        );
 
         if (rules.isEmpty()) {
-            log.info("No applicable rules for postpaid: service={} daysOverdue={}", 
+            log.info("No applicable rule for postpaid: service={} on exact overdue day {}",
                 sub.getServiceName(), daysOverdue);
             return;
         }
 
-        // Get most severe applicable rule
-        DunningRule chosen = rules.get(rules.size() - 1);
-        log.info("Selected rule {} for postpaid {} (days overdue: {})", 
-            chosen.getId(), sub.getServiceName(), daysOverdue);
+        for (DunningRule rule : rules) {
+            log.info("Found matching rule {} for postpaid {} (days overdue: {})",
+                rule.getId(), sub.getServiceName(), daysOverdue);
 
-        // Check for existing unresolved event
-        boolean exists = eventRepo.findByCustomerCustomerIdOrderByCreatedAtDesc(customer.getCustomerId())
-                .stream()
-                .anyMatch(e -> e.getServiceName().equals(sub.getServiceName())
-                        && !"RESOLVED".equals(e.getStatus())
-                        && e.getAppliedRule() != null
-                        && e.getAppliedRule().getAction().equals(chosen.getAction()));
+            // Check if an event for this specific subscription and rule combination already exists.
+            boolean eventExists = eventRepo.existsBySubscriptionAndAppliedRule(sub, rule);
 
-        if (!exists) {
+            if (eventExists) {
+                log.info("Event for rule {} and subscription {} already exists. Skipping.",
+                    rule.getId(),
+                    sub.getId());
+                continue; // Skip to the next rule
+            }
+
             // Create new dunning event
-            DunningEvent ev = new DunningEvent();
-            ev.setCustomer(customer);
-            ev.setServiceName(sub.getServiceName());
-            ev.setDaysOverdue((int) daysOverdue);
-            ev.setStatus("PENDING");
-            ev.setTriggeredBy("SYSTEM");
-            ev.setCreatedAt(LocalDateTime.now());
-            ev.setAppliedRule(chosen);
-            ev.setOriginalDueDate(dueDate.atStartOfDay());
+            DunningEvent ev = createDunningEvent(customer, sub, rule, daysOverdue, dueDate);
             eventRepo.save(ev);
 
-            log.info("Created postpaid dunning event: customer={} service={} rule={}", 
-                customer.getCustomerId(), sub.getServiceName(), chosen.getId());
+            log.info("Created postpaid dunning event: customer={} service={} rule={}",
+                customer.getCustomerId(), sub.getId(), rule.getId());
 
             // Apply immediate actions
-            if ("THROTTLE_SPEED".equals(chosen.getAction())) {
+            applyImmediateAction(sub, rule.getAction());
+        }
+    }
+
+    private DunningEvent createDunningEvent(Customer customer, ServiceSubscription sub, DunningRule rule, long daysOverdue, LocalDate dueDate) {
+        DunningEvent ev = new DunningEvent();
+        ev.setCustomer(customer);
+        ev.setSubscription(sub); // Set the direct subscription link
+        ev.setDaysOverdue((int) daysOverdue);
+        ev.setOriginalDueDate(dueDate.atStartOfDay());
+        ev.setStatus("PENDING");
+        ev.setTriggeredBy("SYSTEM");
+        ev.setCreatedAt(LocalDateTime.now());
+        ev.setAppliedRule(rule);
+        return ev;
+    }
+
+    private void applyImmediateAction(ServiceSubscription sub, String action) {
+        boolean blockSubscription = false;
+        if ("THROTTLE_DATA".equals(action) || "BAR_OUTGOING_CALLS".equals(action) || "THROTTLE_SPEED".equals(action)) {
+            blockSubscription = true;
+        }
+
+        if (blockSubscription) {
+            // Only update if the status is not already BLOCKED
+            if (!"BLOCKED".equals(sub.getStatus())) {
                 sub.setStatus("BLOCKED");
                 subRepo.save(sub);
-                log.info("Applied THROTTLE_SPEED to subscription {}", sub.getId());
+                log.info("Applied action '{}' and set status to BLOCKED for subscription {}", action, sub.getId());
+            } else {
+                log.info("Action '{}' applicable, but subscription {} is already BLOCKED.", action, sub.getId());
             }
         }
     }
@@ -291,10 +296,7 @@ public class DunningEventService {
         eventRepo.save(ev);
 
         // Fetch customer's subscription
-        List<ServiceSubscription> subs = subRepo.findByCustomerCustomerIdAndServiceName(
-            ev.getCustomer().getCustomerId(),
-            ev.getServiceName()
-        );
+        List<ServiceSubscription> subs = subRepo.findByCustomerCustomerIdAndId(ev.getCustomer().getCustomerId(), ev.getSubscription().getId());
 
         if (subs.isEmpty()) {
             throw new RuntimeException("Subscription not found");
@@ -305,9 +307,7 @@ public class DunningEventService {
         subRepo.save(sub);
 
         log.info("Customer {} subscription {} reset to ACTIVE after resolving rule {}",
-                 ev.getCustomer().getCustomerId(), ev.getServiceName(), rule.getId());
+                 ev.getCustomer().getCustomerId(), sub.getId(), rule.getId());
     }
-
-
 
 }

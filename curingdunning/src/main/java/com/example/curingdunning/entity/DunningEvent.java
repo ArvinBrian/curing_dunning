@@ -22,13 +22,15 @@ public class DunningEvent {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @ManyToOne
+    @JoinColumn(name = "subscription_id") // This creates a foreign key column
+    private ServiceSubscription subscription;
+
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     @JsonBackReference
     private Customer customer;
-
-    @Column(nullable = false)
-    private String serviceName;
 
     // days overdue at time of creation
     private int daysOverdue;

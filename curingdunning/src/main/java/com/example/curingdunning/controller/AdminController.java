@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.example.curingdunning.dto.AdminDunningRuleDTO;
 import com.example.curingdunning.dto.AdminLoginRequest;
 import com.example.curingdunning.dto.AllEventsViewDTO;
+import com.example.curingdunning.dto.CustomerDTO;
+import com.example.curingdunning.dto.CustomerDetailsDTO;
 import com.example.curingdunning.dto.LoginResponse;
 import com.example.curingdunning.entity.Admin;
 import com.example.curingdunning.entity.Customer;
@@ -135,20 +137,27 @@ public class AdminController {
     }
 
 	// **Update the getFilteredCustomers endpoint:**
-	@GetMapping("/customers")
-	public ResponseEntity<List<Customer>> getFilteredCustomers(@RequestParam(required = false) Long customerId,
-			@RequestParam(required = false) String phoneNumber) {
+ // In AdminController.java
 
-		// The service layer now decides whether to filter or return all based on the
-		// params.
-		List<Customer> customers = adminService.getCustomersByFilters(customerId, phoneNumber);
-		return ResponseEntity.ok(customers);
-	}
+    @GetMapping("/customers")
+    public ResponseEntity<List<CustomerDTO>> getFilteredCustomers(@RequestParam(required = false) Long customerId,
+            @RequestParam(required = false) String phoneNumber) {
+
+        // The service layer now returns a List<CustomerDTO>
+        List<CustomerDTO> customers = adminService.getCustomersByFilters(customerId, phoneNumber);
+        return ResponseEntity.ok(customers);
+    }
 	
 	@PostMapping("/customers")
     public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
         Customer newCustomer = adminService.createCustomer(customer);
         return new ResponseEntity<>(newCustomer, HttpStatus.CREATED);
+    }
+	
+	@GetMapping("/customers/{customerId}")
+    public ResponseEntity<CustomerDetailsDTO> getCustomerById(@PathVariable Long customerId) {
+        CustomerDetailsDTO customerDetails = adminService.getCustomerDetailsById(customerId);
+        return ResponseEntity.ok(customerDetails);
     }
 
 	private DunningRule convertToEntity(AdminDunningRuleDTO dto) {

@@ -15,6 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.curingdunning.dto.AllEventsViewDTO;
+import com.example.curingdunning.dto.CustomerDTO;
+import com.example.curingdunning.dto.CustomerDetailsDTO;
+import com.example.curingdunning.dto.DunningEventDTO;
+import com.example.curingdunning.dto.SubscriptionDTO;
 import com.example.curingdunning.entity.Admin;
 import com.example.curingdunning.entity.Customer;
 import com.example.curingdunning.entity.DunningEvent;
@@ -80,7 +84,10 @@ public class AdminService {
         // Filter the events based on the provided criteria
         List<DunningEvent> filteredEvents = allEvents.stream()
             .filter(event -> status == null || status.trim().isEmpty() || event.getStatus().equalsIgnoreCase(status))
-            .filter(event -> serviceName == null || serviceName.trim().isEmpty() || event.getServiceName().equalsIgnoreCase(serviceName))
+            .filter(event -> serviceName == null || serviceName.trim().isEmpty() || (
+                event.getSubscription() != null && 
+                event.getSubscription().getServiceName().equalsIgnoreCase(serviceName))
+            )
             .filter(event -> {
                 if (planType == null || planType.trim().isEmpty() || planType.equalsIgnoreCase("ALL")) {
                     return true; // No planType filter, so include the event
@@ -94,7 +101,9 @@ public class AdminService {
         return filteredEvents.stream().map(event -> {
             AllEventsViewDTO dto = new AllEventsViewDTO();
             dto.setId(event.getId());
-            dto.setServiceName(event.getServiceName());
+            if (event.getSubscription() != null) {
+                dto.setServiceName(event.getSubscription().getServiceName());
+            }
             dto.setStatus(event.getStatus());
             dto.setCreatedAt(event.getCreatedAt());
 
@@ -219,7 +228,7 @@ public class AdminService {
     }
 
     private void resolvePendingDunningEvents(Long customerId, String serviceName) {
-        List<DunningEvent> events = eventRepo.findByCustomerCustomerIdAndServiceNameAndStatus(
+        List<DunningEvent> events = eventRepo.findByCustomer_CustomerIdAndSubscription_ServiceNameAndStatus(
             customerId, serviceName, "PENDING"
         );
         
@@ -235,19 +244,23 @@ public class AdminService {
         return customerRepo.findAll();
     }
     
-    public List<Customer> getCustomersByFilters(Long customerId, String phoneNumber) {
-        // Check if ANY filter criteria is provided
+    public List<CustomerDTO> getCustomersByFilters(Long customerId, String phoneNumber) {
         boolean hasCustomerId = (customerId != null);
         boolean hasPhoneNumber = (phoneNumber != null && !phoneNumber.trim().isEmpty());
 
+        List<Customer> customers; // <-- Declare list
+
         if (!hasCustomerId && !hasPhoneNumber) {
-            // **FIX 1: When no filter is specified, return ALL customers.**
-            return customerRepo.findAll(); 
+            customers = customerRepo.findAll(); 
+        } else {
+            String phoneFilter = hasPhoneNumber ? phoneNumber.trim() : null;
+            customers = customerRepo.findByFilters(customerId, phoneFilter);
         }
 
-        // If filters ARE provided, use the filtering logic (as previously defined)
-        String phoneFilter = hasPhoneNumber ? phoneNumber.trim() : null;
-        return customerRepo.findByFilters(customerId, phoneFilter);
+        // --- MAP THE ENTITY LIST TO A DTO LIST ---
+        return customers.stream()
+            .map(CustomerDTO::new) // Uses the constructor we made
+            .collect(Collectors.toList());
     }
     
     public Map<String, Long> getDashboardStats() {
@@ -279,4 +292,54 @@ public class AdminService {
 
         return customerRepo.save(newCustomer);
     }
+
+ // In AdminService.java
+
+    public CustomerDetailsDTO getCustomerDetailsById(Long customerId) {
+        // 1. Fetch the core customer entity
+        Customer customer = customerRepo.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found with id: " + customerId));
+
+        // 2. Fetch related entities
+        List<ServiceSubscription> subscriptions = subRepo.findByCustomerCustomerId(customerId);
+        List<DunningEvent> dunningEvents = eventRepo.findByCustomerCustomerId(customerId);
+
+        // 3. Map ServiceSubscription entities to SubscriptionDTOs
+        List<SubscriptionDTO> subscriptionDTOs = subscriptions.stream().map(sub -> {
+            SubscriptionDTO subDto = new SubscriptionDTO();
+            subDto.setSubscriptionId(sub.getId());
+            subDto.setServiceName(sub.getServiceName());
+            subDto.setStatus(sub.getStatus());
+            subDto.setDueAmount(sub.getDueAmount());
+            subDto.setNextPaymentDate(sub.getNextPaymentDate());
+            return subDto;
+        }).collect(Collectors.toList());
+
+        // 4. Map DunningEvent entities to your existing DunningEventDTOs
+        List<DunningEventDTO> dunningEventDTOs = dunningEvents.stream().map(event -> {
+            DunningEventDTO eventDto = new DunningEventDTO();
+            eventDto.setEventId(event.getId());
+            if (event.getSubscription() != null) {
+                eventDto.setServiceName(event.getSubscription().getServiceName());
+            }
+            eventDto.setDaysOverdue(event.getDaysOverdue());
+            eventDto.setStatus(event.getStatus());
+            eventDto.setCreatedAt(event.getCreatedAt());
+            return eventDto;
+        }).collect(Collectors.toList());
+
+        // 5. Build the final CustomerDetailsDTO
+        CustomerDetailsDTO detailsDto = new CustomerDetailsDTO();
+        detailsDto.setCustomerId(customer.getCustomerId());
+        detailsDto.setName(customer.getName());
+        detailsDto.setEmail(customer.getEmail());
+        detailsDto.setPhone(customer.getPhone());
+        detailsDto.setStatus(customer.getStatus() != null ? customer.getStatus().name() : "UNKNOWN");
+        
+        detailsDto.setSubscriptions(subscriptionDTOs);
+        detailsDto.setDunningEvents(dunningEventDTOs);
+
+        return detailsDto;
+    }
+
 }
