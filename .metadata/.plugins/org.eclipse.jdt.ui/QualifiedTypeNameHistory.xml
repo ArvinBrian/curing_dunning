@@ -12,11 +12,9 @@
     <fullyQualifiedTypeName name="java.util.Comparator"/>
     <fullyQualifiedTypeName name="org.slf4j.LoggerFactory"/>
     <fullyQualifiedTypeName name="jakarta.persistence.Id"/>
-    <fullyQualifiedTypeName name="com.example.curingdunning.entity.Admin"/>
     <fullyQualifiedTypeName name="jakarta.persistence.EnumType"/>
     <fullyQualifiedTypeName name="io.jsonwebtoken.io.IOException"/>
     <fullyQualifiedTypeName name="org.springframework.security.core.Authentication"/>
-    <fullyQualifiedTypeName name="java.util.List"/>
     <fullyQualifiedTypeName name="java.util.Map"/>
     <fullyQualifiedTypeName name="org.springframework.security.core.annotation.AuthenticationPrincipal"/>
     <fullyQualifiedTypeName name="java.util.Optional"/>
@@ -24,4 +22,7 @@
     <fullyQualifiedTypeName name="lombok.Value"/>
     <fullyQualifiedTypeName name="jakarta.transaction.Transactional"/>
     <fullyQualifiedTypeName name="java.util.function.Function"/>
+    <fullyQualifiedTypeName name="com.example.curingdunning.entity.Admin"/>
+    <fullyQualifiedTypeName name="java.util.List"/>
+    <fullyQualifiedTypeName name="jakarta.persistence.CascadeType"/>
 </qualifiedTypeNameHistroy>
